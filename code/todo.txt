@@ -1,0 +1,8 @@
+an mmo needs:
+
+* draw a grid 
+* walk around
+* start server
+* connect client
+* send position/movement
+send text messages
