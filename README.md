@@ -6,6 +6,11 @@ This project uses the C like lang compiler as a git submodule.
 
 ## initial build
 1. Checkout the repository with `git clone --recurse-submodules https://github.com/amooseinaroom/chatworld.git`.
+2. In Visual Studio Command Prompt run `init_build.bat`.
+
+or
+
+1. Checkout the repository with `git clone --recurse-submodules https://github.com/amooseinaroom/chatworld.git`.
 2. Go into the `lang` directory.
 3. In Visual Studio Command Prompt run `build_lang.bat`, `build_stb_truetype_lib.bat` and `build_stb_image_lib.bat`.
 4. Go back up to the `chatworld` directory.
