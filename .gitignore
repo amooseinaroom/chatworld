@@ -1,0 +1,11 @@
+*.pdb
+*.exe
+*.lib
+*.dll
+
+/build
+/release
+/debug
+
+.svn/
+.vs/
