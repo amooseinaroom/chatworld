@@ -2,6 +2,7 @@
 *.exe
 *.lib
 *.dll
+*.bin
 
 /build
 /release
