@@ -19,6 +19,9 @@ struct game_client_connection
     position  vec2;
     id        u32;
     do_update b8;
+
+    chat_message           string255;
+    broadcast_chat_message b8;
 }
 
 func init(server game_server ref, network platform_network ref)
@@ -85,6 +88,11 @@ func tick(server game_server ref, network platform_network ref)
             client.position += result.message.movement.movement * result.message.movement.delta_seconds;
             client.do_update = true;
         }
+        case network_message_tag.chat
+        {
+            client.chat_message = result.message.chat.text;
+            client.broadcast_chat_message = true;
+        }
         
         print("Server: GOTTEM! % %\n", result.message.tag, result.address);
     }
@@ -105,13 +113,44 @@ func tick(server game_server ref, network platform_network ref)
             message.position.position = other.position;
             send(network, message, server.socket, client.address);
         }
+
+        if client.broadcast_chat_message
+        {
+            var message network_message_union;
+            message.tag = network_message_tag.chat;
+            message.chat.id = client.id;
+            message.chat.text = client.chat_message;
+            send(network, message, server.socket, client.address);
+        }
     }
 
     loop var a u32; server.client_count
     {
         var client = server.clients[a] ref;
         client.do_update = false;
+        client.broadcast_chat_message = false;
     }
+}
+
+struct string255
+{
+    count       u8;
+    expand base u8[255];
+}
+
+func to_string255(text string) (result string255)
+{    
+    var result string255;
+    assert(text.count <= result.base.count);
+    copy_array({ text.count, result.base.base } u8[], text);
+    result.count = text.count cast(u8);
+    
+    return result;
+}
+
+func from_string255(text string255) (result string)
+{
+    return { text.count, text.base.base } string;
 }
 
 enum network_message_tag
@@ -119,6 +158,7 @@ enum network_message_tag
     login;
     movement;
     position;
+    chat;
 }
 
 struct network_message_base
@@ -149,6 +189,14 @@ struct network_message_position
     position vec2;    
 }
 
+struct network_message_chat
+{
+    expand base network_message_base;
+    
+    text string255;
+    id   u32;
+}
+
 type network_message_union union
 {
     expand base network_message_base;
@@ -156,6 +204,7 @@ type network_message_union union
     login    network_message_login;
     movement network_message_movement;
     position network_message_position;
+    chat     network_message_chat;
 };
 
 func send(network platform_network ref, message network_message_union, send_socket platform_network_socket, address = {} platform_network_address)

@@ -63,8 +63,26 @@ func game_update program_update_type
         var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
 
         var player = state.client.players[0] ref;
+
+        state.client.frame_movement = {} vec2;
+        state.client.frame_delta_seconds = 0;
         
+        if game.is_chatting
         {
+            if platform_key_was_pressed(platform, platform_key.enter)
+            {
+                state.client.send_chat_message = true;
+                state.client.chat_message = to_string255("hello server!");
+                game.is_chatting = false;
+            }
+        }
+        else
+        {
+            if platform_key_was_pressed(platform, platform_key.enter)
+            {
+                game.is_chatting = true; 
+            }
+
             var movement vec2;
             movement.x = platform_key_is_active(platform, "D"[0]) cast(s32) - platform_key_is_active(platform, "A"[0]) cast(s32);
             movement.y = platform_key_is_active(platform, "W"[0]) cast(s32) - platform_key_is_active(platform, "S"[0]) cast(s32);
@@ -128,6 +146,22 @@ func game_update program_update_type
             box.max = ceil(box.min + tile_size);        
             var color = [ 128, 128, 255, 255 ] rgba8;
             draw_box(ui, 2, color, box);
+
+            if player.chat_message_timeout > 0
+            {
+                var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.2 ] vec2, [ 0.5, 0 ] vec2);
+
+                var t = pow(player.chat_message_timeout, 0.25);
+                var alpha = (255 * t) cast(u8);
+
+                var cursor = cursor_below_position(font.info, 0, 0);
+                var text_color = [ 10, 10, 10, alpha ] rgba8;
+                print(ui, 11, text_color, font, cursor ref, from_string255(player.chat_message));
+
+                var box = draw_aligned_end(ui, aligned_state);                
+                var chat_color = [ 245, 245, 245, alpha ] rgba8;
+                draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
+            }
         }
     }
 

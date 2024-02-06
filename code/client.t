@@ -14,6 +14,9 @@ struct game_client
 
     players      game_player[max_player_count];
     player_count u32;
+
+    chat_message      string255;
+    send_chat_message b8;
     
     id u32;
 }
@@ -22,6 +25,9 @@ struct game_player
 {
     position vec2;
     id       u32;
+
+    chat_message         string255;
+    chat_message_timeout f32;
 }
 
 enum client_state
@@ -57,6 +63,12 @@ func init(client game_client ref, network platform_network ref)
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
 {
+    loop var i u32; client.player_count
+    {
+        if client.players[i].chat_message_timeout > 0
+            client.players[i].chat_message_timeout -= delta_seconds * 0.1;
+    }
+
     while true
     {
         var result = receive(network, client.socket);
@@ -82,34 +94,18 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 break;            
             
             var message = result.message.position;
-            
-            var found_index = u32_invalid_index;
-            loop var i u32; client.player_count
-            {
-                if client.players[i].id is message.id
-                {
-                    found_index = i;
-                    break;
-                }
-            }
-
-            if found_index is u32_invalid_index
-            {
-                if client.player_count >= client.players.count
-                {
-                    print("Client: can't add more remote player\n");
-                    break;
-                }
-
-                found_index = client.player_count;
-                var player = client.players[found_index] ref;
-                player deref = {} game_player;
-                player.id = message.id;            
-                client.player_count += 1;
-            }
-
-            var player = client.players[found_index] ref;
+            var player = find_player(client, message.id);            
             player.position = message.position;
+        }
+        case network_message_tag.chat
+        {
+            if client.state is_not client_state.online            
+                break;            
+            
+            var message = result.message.chat;
+            var player = find_player(client, message.id);            
+            player.chat_message = message.text;
+            player.chat_message_timeout = 1;
         }
 
         print("Client: GOTTEM! % %\n", result.message.tag, result.address);
@@ -138,14 +134,53 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
     }
     case client_state.online
     {
-        if squared_length(client.frame_movement) is 0
-            break;
+        if squared_length(client.frame_movement) > 0
+        {
+            var message network_message_union;
+            message.tag = network_message_tag.movement;
+            message.movement.movement = client.frame_movement;
+            message.movement.delta_seconds = client.frame_delta_seconds;            
+            send(network, message, client.socket, client.server_address);
+        }
 
-        var message network_message_union;
-        message.tag = network_message_tag.movement;
-        message.movement.movement = client.frame_movement;
-        message.movement.delta_seconds = client.frame_delta_seconds;
-        
-        send(network, message, client.socket, client.server_address);        
+        if client.send_chat_message
+        {
+            var message network_message_union;
+            message.tag = network_message_tag.chat;
+            message.chat.text = client.chat_message;
+            send(network, message, client.socket, client.server_address);   
+        }
     }
+
+    client.send_chat_message = false;
+}
+
+func find_player(client game_client ref, id u32) (player game_player ref)
+{
+    var found_index = u32_invalid_index;
+    loop var i u32; client.player_count
+    {
+        if client.players[i].id is id
+        {
+            found_index = i;
+            break;
+        }
+    }
+
+    if found_index is u32_invalid_index
+    {
+        if client.player_count >= client.players.count
+        {
+            print("Client: can't add more remote player\n");
+            return null;
+        }
+
+        found_index = client.player_count;
+        var player = client.players[found_index] ref;
+        player deref = {} game_player;
+        player.id = id;            
+        client.player_count += 1;
+    }
+
+    return client.players[found_index] ref;
 }

@@ -12,6 +12,6 @@ day 2:
 
 * separate client/server
 * let people connect to our local server
+* have other people connect
 send text messages
-have other people connect
 login name+password
