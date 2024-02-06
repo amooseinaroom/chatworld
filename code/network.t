@@ -1,7 +1,7 @@
 
-def server_port = 51337 cast(u16);
+def server_port = 18124 cast(u16); //51337 cast(u16);
 
-def max_player_count = 2;
+def max_player_count = 4;
 
 struct game_server
 {

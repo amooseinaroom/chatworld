@@ -1,3 +1,4 @@
+import win32;
 
 struct game_client
 {
@@ -40,6 +41,18 @@ func init(client game_client ref, network platform_network ref)
     client.server_address.port = server_port;
     client.server_address.ip[0] = 127;
     client.server_address.ip[3] = 1;
+
+    var records DNS_RECORD ref;
+    var status = DnsQuery_A("band-hood.gl.at.ply.gg\0".base cast(cstring), DNS_TYPE_A, DNS_QUERY_STANDARD, null, records cast(u8 ref) ref, null);
+    var iterator = records;
+    while iterator
+    {
+        client.server_address.ip = iterator.Data.A.IpAddress ref cast(platform_network_ip ref) deref;
+        break;
+        iterator = iterator.pNext;
+    }
+
+    DnsRecordListFree(records, 0);
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)

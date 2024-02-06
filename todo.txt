@@ -1,11 +1,17 @@
 an mmo needs:
 
+day 1:
+
 * draw a grid
 * walk around
 * start server
 * connect client
 * send position/movement
+
+day 2:
+
+* separate client/server
+* let people connect to our local server
 send text messages
-separate client/server
 have other people connect
 login name+password
