@@ -1,0 +1,32 @@
+
+democracy system
+- vote on different actions
+- declare a substitute voter for different actions
+- if substitute votes and you don't, substitute's vote is increased by 1
+- player can see if there is a voting happing for them, like a ban
+    - this way player can ask others to vote in their favour to avoid the action
+    - other people don't see if someone has a voting happening to avoid bias
+    - there needs to be a reasonable timeframe for this, so players can react
+- actions:
+    - baning people: 2/3 majority rule
+        - timed ban or perma ban?
+
+customization system
+- players can specify art to be used in the game
+- other people can see if a player has customization available and can opt it to view
+- players can block other players custimization if they end up not liking them (you see player has customization but also that it's blocked by you)
+- custimization are send peer to peer on demand, so no player or server is liable for distributing unsafe content
+- custimization needs a checksum so we can cache it and don't have to download it each time
+- maybe keep track on how many people have looked at customization vs. how many blocked it to warn other players before viewing customization
+    - show a percent rating of how many people didn't like it
+- similar to appearance, we want to add custom emotes to the game
+    - you opt-in for emotes as well
+    - you can block individual emotes, if you don't want to block all
+    - cache emotes and checksums
+    - easy way to copy other player emotes to use yourself
+        - warn people that they become liable if they do this
+        - new emotes will be free to copy after a grace period
+        - people can vote for banning emotes
+            - use checksum, but of course it's easy to make a minor change which makes the checksum useless
+            - vote for punishing people who abuse this, maybe by taking away their emote rights?
+    - emotes get assigned a string, which will be replaced if the player has them enabled (like 7TV)

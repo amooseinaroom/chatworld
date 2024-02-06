@@ -1,8 +1,11 @@
 an mmo needs:
 
-* draw a grid 
+* draw a grid
 * walk around
 * start server
 * connect client
 * send position/movement
 send text messages
+separate client/server
+have other people connect
+login name+password
