@@ -104,24 +104,25 @@ func tick(server game_server ref, network platform_network ref)
         loop var b u32; server.client_count
         {
             var other = server.clients[b] ref;
-            if not other.do_update
-                continue;
 
-            var message network_message_union;
-            message.tag = network_message_tag.position;
-            message.position.id = other.id;
-            message.position.position = other.position;
-            send(network, message, server.socket, client.address);
-        }
+            if client.broadcast_chat_message
+            {
+                var message network_message_union;
+                message.tag = network_message_tag.chat;
+                message.chat.id = client.id;
+                message.chat.text = client.chat_message;
+                send(network, message, server.socket, other.address);
+            }
 
-        if client.broadcast_chat_message
-        {
-            var message network_message_union;
-            message.tag = network_message_tag.chat;
-            message.chat.id = client.id;
-            message.chat.text = client.chat_message;
-            send(network, message, server.socket, client.address);
-        }
+            if other.do_update
+            {
+                var message network_message_union;
+                message.tag = network_message_tag.position;
+                message.position.id = other.id;
+                message.position.position = other.position;
+                send(network, message, server.socket, client.address);
+            }
+        }        
     }
 
     loop var a u32; server.client_count
