@@ -69,10 +69,19 @@ func game_update program_update_type
         
         if game.is_chatting
         {
-            if platform_key_was_pressed(platform, platform_key.enter)
+            state.client.chat_message_edit.buffer.count = state.client.chat_message.base.count;
+            state.client.chat_message_edit.buffer.base  = state.client.chat_message.base.base;
+
+            var characters = { platform.character_count, platform.character_buffer.base } platform_character[];
+
+            edit_text(state.client.chat_message_edit ref, characters ref);
+            state.client.chat_message.count = state.client.chat_message_edit.used_count cast(u8);
+
+            
+            if not platform_key_is_active(platform, platform_key.control) and not platform_key_is_active(platform, platform_key.alt) and not platform_key_is_active(platform, platform_key.shift) and platform_key_was_pressed(platform, platform_key.enter)
             {
                 state.client.send_chat_message = true;
-                state.client.chat_message = to_string255("hello server!");
+                state.client.chat_message = state.client.chat_message;
                 game.is_chatting = false;
             }
         }
@@ -81,6 +90,9 @@ func game_update program_update_type
             if platform_key_was_pressed(platform, platform_key.enter)
             {
                 game.is_chatting = true; 
+                state.client.chat_message_edit.edit_offset = 0;
+                state.client.chat_message_edit.used_count  = 0;
+                state.client.chat_message.count            = 0;
             }
 
             var movement vec2;
@@ -158,6 +170,49 @@ func game_update program_update_type
                 var text_color = [ 10, 10, 10, alpha ] rgba8;
                 print(ui, 11, text_color, font, cursor ref, from_string255(player.chat_message));
 
+                var box = draw_aligned_end(ui, aligned_state);                
+                var chat_color = [ 245, 245, 245, alpha ] rgba8;
+                draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
+            }
+            
+            if (i is 0) and game.is_chatting
+            {
+                var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 0 ] vec2) - [ 0, tile_size * 0.2 ] vec2, [ 0.5, 1 ] vec2);
+
+                // var t = pow(player.chat_message_timeout, 0.25);
+                var alpha = 255 cast(u8);
+
+                var text = from_string255(state.client.chat_message);
+
+                var cursor = cursor_below_position(font.info, 0, 0);
+                var text_color = [ 10, 10, 10, alpha ] rgba8;
+
+                def caret_width = 3;
+
+                var text_iterator = make_iterator(font.info, text, cursor);
+                print(ui, 11, text_color, font, cursor ref, text);
+                ui.current_box = grow(ui.current_box, [ caret_width * 2, 0 ] vec2);
+
+                {                    
+                    text_iterator.text.count = state.client.chat_message_edit.edit_offset + 1;                      
+                    
+                    var previous_x = text_iterator.cursor.x;
+                    
+                    if text.count
+                    {
+                        while text_iterator.text.count
+                        {
+                            advance(text_iterator ref);
+                            previous_x = text_iterator.cursor.x;
+                        }               
+                    }
+
+                    var box box2;                     
+                    box.min = [ previous_x, text_iterator.cursor.y - font.info.bottom_margin ] vec2;
+                    box.max = box.min + [ 0, font.info.max_glyph_height ] vec2;
+                    draw_box(ui, 12, [ 20, 255, 20, 196 ] rgba8, grow(box, caret_width));
+                }
+                
                 var box = draw_aligned_end(ui, aligned_state);                
                 var chat_color = [ 245, 245, 245, alpha ] rgba8;
                 draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);

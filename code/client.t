@@ -15,6 +15,7 @@ struct game_client
     players      game_player[max_player_count];
     player_count u32;
 
+    chat_message_edit editable_text;
     chat_message      string255;
     send_chat_message b8;
     
@@ -48,6 +49,9 @@ func init(client game_client ref, network platform_network ref)
     client.server_address.ip[0] = 127;
     client.server_address.ip[3] = 1;
 
+    multiline_comment
+    {
+
     var records DNS_RECORD ref;
     var status = DnsQuery_A("band-hood.gl.at.ply.gg\0".base cast(cstring), DNS_TYPE_A, DNS_QUERY_STANDARD, null, records cast(u8 ref) ref, null);
     var iterator = records;
@@ -59,6 +63,7 @@ func init(client game_client ref, network platform_network ref)
     }
 
     DnsRecordListFree(records, 0);
+    }
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
