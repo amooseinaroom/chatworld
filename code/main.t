@@ -11,16 +11,16 @@ struct program_state
 
     network platform_network;
 
-    is_host b8;    
+    is_host b8;
 
     server game_server;
     client game_client;
 
-    menu menu_state;    
+    menu menu_state;
 }
 
 func skip_space(iterator string ref)
-{    
+{
     try_skip_set(iterator, " \t\n\r");
 }
 
@@ -29,15 +29,13 @@ func game_init program_init_type
     state.letterbox_width_over_heigth = 16.0 / 9.0;
 
     platform_network_init(state.network ref);
-    //init(state.server ref, state.network ref);
-    //init(client ref, state.network ref);
 
     var client = state.client ref;
     client.server_address.port = default_server_port;
     client.server_address.ip[0] = 127;
     client.server_address.ip[3] = 1;
 
-    if false
+    if true
     {
         var tmemory = state.temporary_memory ref;
         var source = platform_read_entire_file(platform, tmemory, "server.txt");
@@ -50,13 +48,13 @@ func game_init program_init_type
         while it.count
         {
             if not try_skip(it ref, "server")
-                assert(false);            
+                assert(false);
 
             skip_space(it ref);
 
-            address = try_skip_until_set(it ref, " \t\n\r");            
+            address = try_skip_until_set(it ref, " \t\n\r");
             assert(address.count);
-            
+
             if not try_parse_u32(port ref, it ref) and (port <= 65535)
                 assert(false);
 
@@ -70,16 +68,13 @@ func game_init program_init_type
             var name_buffer u8[512];
             var status = DnsQuery_A(as_cstring(name_buffer, address), DNS_TYPE_A, DNS_QUERY_STANDARD, null, records cast(u8 ref) ref, null);
             var iterator = records;
-            while iterator
+            if iterator
             {
                 client.server_address.ip = iterator.Data.A.IpAddress ref cast(platform_network_ip ref) deref;
-                break;
-                iterator = iterator.pNext;
+                client.server_address.port = port cast(u16);
             }
 
             DnsRecordListFree(records, 0);
-
-            client.server_address.port = port cast(u16);
         }
     }
 }
@@ -98,7 +93,7 @@ func game_update program_update_type
     var font = state.font;
 
     if client.state is client_state.disconnected
-    {   
+    {
         var box = draw_box_begin(ui);
         var cursor = cursor_below_position(font.info, ui.viewport_size.width * 0.5, ui.viewport_size.height * 0.5);
 
@@ -116,17 +111,17 @@ func game_update program_update_type
         {
             init(state.server ref, platform, state.network ref, client.server_address.port, tmemory);
             init(client, state.network ref, client.server_address);
-            state.is_host = true;            
+            state.is_host = true;
         }
 
         if menu_button(menu, location_id(0), font, cursor ref, "Connect")
-        {            
-            init(client, state.network ref, client.server_address);            
-        }        
+        {
+            init(client, state.network ref, client.server_address);
+        }
     }
     else
     {
-        // update(platform, state);    
+        // update(platform, state);
 
         var tiles_per_width = 20;
         var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
@@ -135,18 +130,18 @@ func game_update program_update_type
 
         client.frame_movement = {} vec2;
         client.frame_delta_seconds = 0;
-        
+
         if game.is_chatting
         {
             client.chat_message_edit.buffer.count = client.chat_message.base.count;
-            client.chat_message_edit.buffer.base  = client.chat_message.base.base;            
+            client.chat_message_edit.buffer.base  = client.chat_message.base.base;
 
             edit255_begin(client.chat_message_edit ref, client.chat_message ref);
 
             edit_text(client.chat_message_edit ref, menu.characters ref);
-            
+
             edit255_end(client.chat_message_edit, client.chat_message ref);
-            
+
             if not platform_key_is_active(platform, platform_key.control) and not platform_key_is_active(platform, platform_key.alt) and not platform_key_is_active(platform, platform_key.shift) and platform_key_was_pressed(platform, platform_key.enter)
             {
                 client.send_chat_message = true;
@@ -158,7 +153,7 @@ func game_update program_update_type
         {
             if platform_key_was_pressed(platform, platform_key.enter)
             {
-                game.is_chatting = true; 
+                game.is_chatting = true;
                 client.chat_message_edit.edit_offset = 0;
                 client.chat_message_edit.used_count  = 0;
                 client.chat_message.count            = 0;
@@ -181,7 +176,7 @@ func game_update program_update_type
                 game.camera_position.x = player.position.x - (tiles_per_width * 0.5) + tile_frame;
             else if player.position.x < (game.camera_position.x - (tiles_per_width * 0.5) + tile_frame)
                 game.camera_position.x = player.position.x + (tiles_per_width * 0.5) - tile_frame;
-            
+
             if player.position.y > (game.camera_position.y + (tiles_per_height * 0.5) - tile_frame)
                 game.camera_position.y = player.position.y - (tiles_per_height * 0.5) + tile_frame;
             else if player.position.y < (game.camera_position.y - (tiles_per_height * 0.5) + tile_frame - 1)
@@ -214,7 +209,7 @@ func game_update program_update_type
 
                 var color = colors[(x + y) bit_and 1];
                 draw_box(ui, 1, color, box);
-            }        
+            }
         }
 
         loop var i u32; client.player_count
@@ -224,7 +219,7 @@ func game_update program_update_type
 
             var box box2;
             box.min = floor({ player_position.x - 0.5, player_position.y } vec2 * tile_size) + tile_offset;
-            box.max = ceil(box.min + tile_size);        
+            box.max = ceil(box.min + tile_size);
             var color = [ 128, 128, 255, 255 ] rgba8;
             draw_box(ui, 2, color, box);
 
@@ -239,11 +234,11 @@ func game_update program_update_type
                 var text_color = [ 10, 10, 10, alpha ] rgba8;
                 print(ui, 11, text_color, font, cursor ref, from_string255(player.chat_message));
 
-                var box = draw_aligned_end(ui, aligned_state);                
+                var box = draw_aligned_end(ui, aligned_state);
                 var chat_color = [ 245, 245, 245, alpha ] rgba8;
                 draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
             }
-            
+
             if (i is 0) and game.is_chatting
             {
                 var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 0 ] vec2) - [ 0, tile_size * 0.2 ] vec2, [ 0.5, 1 ] vec2);
@@ -262,27 +257,27 @@ func game_update program_update_type
                 print(ui, 11, text_color, font, cursor ref, text);
                 ui.current_box = grow(ui.current_box, [ caret_width * 2, 0 ] vec2);
 
-                {                    
-                    text_iterator.text.count = client.chat_message_edit.edit_offset + 1;                      
-                    
+                {
+                    text_iterator.text.count = client.chat_message_edit.edit_offset + 1;
+
                     var previous_x = text_iterator.cursor.x;
-                    
+
                     if text.count
                     {
                         while text_iterator.text.count
                         {
                             advance(text_iterator ref);
                             previous_x = text_iterator.cursor.x;
-                        }               
+                        }
                     }
 
-                    var box box2;                     
+                    var box box2;
                     box.min = [ previous_x, text_iterator.cursor.y - font.info.bottom_margin ] vec2;
                     box.max = box.min + [ 0, font.info.max_glyph_height ] vec2;
                     draw_box(ui, 12, [ 20, 255, 20, 196 ] rgba8, grow(box, caret_width));
                 }
-                
-                var box = draw_aligned_end(ui, aligned_state);                
+
+                var box = draw_aligned_end(ui, aligned_state);
                 var chat_color = [ 245, 245, 245, alpha ] rgba8;
                 draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
             }
@@ -299,7 +294,7 @@ func game_update program_update_type
 func edit255_begin(text_edit editable_text ref, text string255 ref)
 {
     text_edit.buffer.count = text.base.count;
-    text_edit.buffer.base = text.base.base;            
+    text_edit.buffer.base = text.base.base;
 }
 
 func edit255_end(text_edit editable_text, text string255 ref)

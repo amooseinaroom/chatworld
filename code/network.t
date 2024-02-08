@@ -1,5 +1,5 @@
 
-def default_server_port = 51880 cast(u16); // 18124 cast(u16); //51337 cast(u16);
+def default_server_port = 50881 cast(u16); // 18124 cast(u16); //51337 cast(u16);
 
 def max_player_count = 4;
 
@@ -10,12 +10,12 @@ struct string255
 }
 
 func to_string255(text string) (result string255)
-{    
+{
     var result string255;
     assert(text.count <= result.base.count);
     copy_array({ text.count, result.base.base } u8[], text);
     result.count = text.count cast(u8);
-    
+
     return result;
 }
 
@@ -54,7 +54,7 @@ struct network_message_login
     expand base network_message_base;
 
     name     string255;
-    password string255;    
+    password string255;
 }
 
 struct network_message_login_accept
@@ -82,13 +82,13 @@ struct network_message_position
     expand base network_message_base;
 
     id       u32;
-    position vec2;    
+    position vec2;
 }
 
 struct network_message_chat
 {
     expand base network_message_base;
-    
+
     text string255;
     id   u32;
 }
@@ -96,7 +96,7 @@ struct network_message_chat
 type network_message_union union
 {
     expand base network_message_base;
-    
+
     login        network_message_login;
     login_accept network_message_login_accept;
     login_reject network_message_login_reject;

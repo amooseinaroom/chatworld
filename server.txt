@@ -1,1 +1,1 @@
-server moosechatworld.ddns.net 51880
+server moosechatworld.ddns.net 50881
