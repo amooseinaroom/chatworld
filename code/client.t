@@ -15,6 +15,12 @@ struct game_client
     players      game_player[max_player_count];
     player_count u32;
 
+    user_name_edit editable_text;
+    user_name      string255;    
+    
+    user_password_edit editable_text;
+    user_password      string255;    
+
     chat_message_edit editable_text;
     chat_message      string255;
     send_chat_message b8;
@@ -38,32 +44,17 @@ enum client_state
     online;
 }
 
-func init(client game_client ref, network platform_network ref)
-{    
-    client.socket = platform_network_bind(network);
-    require(platform_network_is_valid(client.socket));
+func init(client game_client ref, network platform_network ref, server_address platform_network_address)
+{   
+    if not platform_network_is_valid(client.socket)
+    {
+        client.socket = platform_network_bind(network);
+        require(platform_network_is_valid(client.socket));
+    }
+
     print("Client Up and Running!\n");
-    client.state = client_state.connected;    
-    
-    client.server_address.port = server_port;
-    client.server_address.ip[0] = 127;
-    client.server_address.ip[3] = 1;
-
-    multiline_comment
-    {
-
-    var records DNS_RECORD ref;
-    var status = DnsQuery_A("band-hood.gl.at.ply.gg\0".base cast(cstring), DNS_TYPE_A, DNS_QUERY_STANDARD, null, records cast(u8 ref) ref, null);
-    var iterator = records;
-    while iterator
-    {
-        client.server_address.ip = iterator.Data.A.IpAddress ref cast(platform_network_ip ref) deref;
-        break;
-        iterator = iterator.pNext;
-    }
-
-    DnsRecordListFree(records, 0);
-    }
+    client.state = client_state.connected;
+    client.server_address = server_address;
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
@@ -81,17 +72,22 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             break;
 
         switch result.message.tag
-        case network_message_tag.login
+        case network_message_tag.login_accept
         {
             if client.state is client_state.connected
             {
-                client.id    = result.message.login.id;
+                client.id    = result.message.login_accept.id;
                 client.state = client_state.online;
 
                 // client player instance index is always 0
                 client.player_count = 1;
                 client.players[0].id = client.id;
             }
+        }
+        case network_message_tag.login_reject
+        {
+            client.state = client_state.disconnected;
+
         }
         case network_message_tag.position
         {
@@ -131,7 +127,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
             var message network_message_union;
             message.tag = network_message_tag.login;
-
+            message.login.name     = client.user_name;
+            message.login.password = client.user_password;
             
             send(network, message, client.socket, client.server_address);
             print("Client: reconnecting\n");

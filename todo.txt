@@ -13,5 +13,10 @@ day 2:
 * separate client/server
 * let people connect to our local server
 * have other people connect
-send text messages
-login name+password
+* send text messages
+
+day 3:
+
+* login name+password
+configure server address (check port forwarding)
+harden text messages (ackknowledge system)

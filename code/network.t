@@ -1,137 +1,7 @@
 
-def server_port = 18124 cast(u16); //51337 cast(u16);
+def default_server_port = 51880 cast(u16); // 18124 cast(u16); //51337 cast(u16);
 
 def max_player_count = 4;
-
-struct game_server
-{
-    socket platform_network_socket;
-
-    clients      game_client_connection[max_player_count];
-    client_count u32;
-
-    next_id u32;
-}
-
-struct game_client_connection
-{
-    address   platform_network_address;
-    position  vec2;
-    id        u32;
-    do_update b8;
-
-    chat_message           string255;
-    broadcast_chat_message b8;
-}
-
-func init(server game_server ref, network platform_network ref)
-{    
-    server.socket = platform_network_bind(network, server_port);
-    require(platform_network_is_valid(server.socket));
-    print("Server Up and Running!\n");
-}
-
-func tick(server game_server ref, network platform_network ref)
-{
-    while true
-    {
-        var result = receive(network, server.socket);
-        if not result.ok
-            break;
-
-        var found_index = u32_invalid_index;
-        loop var i u32; server.client_count
-        {
-            if server.clients[i].address is result.address
-            {
-                found_index = i;
-                break;
-            }
-        }
-
-        var client game_client_connection ref;
-        if (found_index is u32_invalid_index) and (result.message.tag is_not network_message_tag.login)
-            continue;
-
-        client = server.clients[found_index] ref;
-
-        switch result.message.tag
-        case network_message_tag.login
-        {            
-            if found_index is u32_invalid_index
-            {
-                if server.client_count >= server.clients.count
-                {
-                    print("Server: rejected player, game is full! %\n", result.address);
-                    break;
-                }
-
-                print("Server: added Client %\n", result.address);
-                found_index = server.client_count;
-                client = server.clients[found_index] ref;
-                client deref = {} game_client_connection;
-                client.address = result.address;
-                server.next_id += 1;
-                assert(server.next_id);
-
-                client.id = server.next_id;
-                server.client_count += 1;
-            }
-
-            var message network_message_union;
-            message.tag = network_message_tag.login;
-            message.login.id = client.id;
-            send(network, message, server.socket, client.address);
-        }
-        case network_message_tag.movement
-        {
-            client.position += result.message.movement.movement * result.message.movement.delta_seconds;
-            client.do_update = true;
-        }
-        case network_message_tag.chat
-        {
-            client.chat_message = result.message.chat.text;
-            client.broadcast_chat_message = true;
-        }
-        
-        print("Server: GOTTEM! % %\n", result.message.tag, result.address);
-    }
-
-    loop var a u32; server.client_count
-    {
-        var client = server.clients[a] ref;
-
-        loop var b u32; server.client_count
-        {
-            var other = server.clients[b] ref;
-
-            if client.broadcast_chat_message
-            {
-                var message network_message_union;
-                message.tag = network_message_tag.chat;
-                message.chat.id = client.id;
-                message.chat.text = client.chat_message;
-                send(network, message, server.socket, other.address);
-            }
-
-            if other.do_update
-            {
-                var message network_message_union;
-                message.tag = network_message_tag.position;
-                message.position.id = other.id;
-                message.position.position = other.position;
-                send(network, message, server.socket, client.address);
-            }
-        }        
-    }
-
-    loop var a u32; server.client_count
-    {
-        var client = server.clients[a] ref;
-        client.do_update = false;
-        client.broadcast_chat_message = false;
-    }
-}
 
 struct string255
 {
@@ -154,9 +24,21 @@ func from_string255(text string255) (result string)
     return { text.count, text.base.base } string;
 }
 
+func is(left string255, right string255) (ok b8)
+{
+    return from_string255(left) is from_string255(right);
+}
+
+func is_not(left string255, right string255) (ok b8)
+{
+    return from_string255(left) is_not from_string255(right);
+}
+
 enum network_message_tag
 {
     login;
+    login_accept;
+    login_reject;
     movement;
     position;
     chat;
@@ -171,7 +53,20 @@ struct network_message_login
 {
     expand base network_message_base;
 
+    name     string255;
+    password string255;    
+}
+
+struct network_message_login_accept
+{
+    expand base network_message_base;
+
     id u32;
+}
+
+struct network_message_login_reject
+{
+    expand base network_message_base;
 }
 
 struct network_message_movement
@@ -202,10 +97,12 @@ type network_message_union union
 {
     expand base network_message_base;
     
-    login    network_message_login;
-    movement network_message_movement;
-    position network_message_position;
-    chat     network_message_chat;
+    login        network_message_login;
+    login_accept network_message_login_accept;
+    login_reject network_message_login_reject;
+    movement     network_message_movement;
+    position     network_message_position;
+    chat         network_message_chat;
 };
 
 func send(network platform_network ref, message network_message_union, send_socket platform_network_socket, address = {} platform_network_address)
