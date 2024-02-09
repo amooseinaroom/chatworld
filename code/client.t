@@ -2,6 +2,8 @@ import win32;
 
 struct game_client
 {
+    game game_state;
+
     socket platform_network_socket;
     
     server_address platform_network_address;
@@ -9,8 +11,7 @@ struct game_client
     state client_state;
     reconnect_timeout f32;
 
-    frame_movement vec2;
-    frame_delta_seconds f32;
+    frame_input network_message_user_input;
 
     players      game_player[max_player_count];
     player_count u32;
@@ -25,13 +26,13 @@ struct game_client
     chat_message      string255;
     send_chat_message b8;
     
-    id u32;
+    entitiy_id game_entity_id;
+    network_id u32;
 }
 
 struct game_player
-{
-    position vec2;
-    id       u32;
+{    
+    entitiy_id game_entity_id;
 
     chat_message         string255;
     chat_message_timeout f32;
@@ -59,6 +60,8 @@ func init(client game_client ref, network platform_network ref, server_address p
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
 {
+    var game = client.game ref;
+
     loop var i u32; client.player_count
     {
         if client.players[i].chat_message_timeout > 0
@@ -76,12 +79,12 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         {
             if client.state is client_state.connected
             {
-                client.id    = result.message.login_accept.id;
+                client.network_id = result.message.login_accept.id;
                 client.state = client_state.online;
 
-                // client player instance index is always 0
-                client.player_count = 1;
-                client.players[0].id = client.id;
+                var entitiy_id = add_player(game, client.network_id);                
+                client.player_count = 0;
+                find_player(client, entitiy_id);                
             }
         }
         case network_message_tag.login_reject
@@ -89,14 +92,30 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             client.state = client_state.disconnected;
 
         }
-        case network_message_tag.position
+        case network_message_tag.update_entity
         {
             if client.state is_not client_state.online            
-                break;            
+                break;
             
-            var message = result.message.position;
-            var player = find_player(client, message.id);            
-            player.position = message.position;
+            var message = result.message.update_entity;
+                         
+            var entitiy_id = find_network_entity(game, message.id);
+            if not entitiy_id.value            
+                entitiy_id = add(game, message.entity.tag, message.id);            
+
+            var entity = get(game, entitiy_id);
+            entity deref = message.entity;                        
+        }
+        case network_message_tag.delete_entity
+        {
+            if client.state is_not client_state.online            
+                break;
+            
+            var message = result.message.delete_entity;
+                         
+            var entitiy_id = find_network_entity(game, message.id);
+            if entitiy_id.value            
+                remove_for_real(game, entitiy_id);                
         }
         case network_message_tag.chat
         {
@@ -104,7 +123,11 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 break;            
             
             var message = result.message.chat;
-            var player = find_player(client, message.id);            
+            
+            var entitiy_id = find_network_entity(game, message.id);
+            assert(entitiy_id.value);
+
+            var player = find_player(client, entitiy_id);
             player.chat_message = message.text;
             player.chat_message_timeout = 1;
         }
@@ -136,12 +159,11 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
     }
     case client_state.online
     {
-        if squared_length(client.frame_movement) > 0
+        if client.frame_input.do_attack or (squared_length(client.frame_input.movement) > 0)
         {
             var message network_message_union;
-            message.tag = network_message_tag.movement;
-            message.movement.movement = client.frame_movement;
-            message.movement.delta_seconds = client.frame_delta_seconds;            
+            message.user_input = client.frame_input;            
+            message.tag = network_message_tag.user_input; // frame_input has no tag set
             send(network, message, client.socket, client.server_address);
         }
 
@@ -157,12 +179,12 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
     client.send_chat_message = false;
 }
 
-func find_player(client game_client ref, id u32) (player game_player ref)
+func find_player(client game_client ref, entitiy_id game_entity_id) (player game_player ref)
 {
     var found_index = u32_invalid_index;
     loop var i u32; client.player_count
     {
-        if client.players[i].id is id
+        if client.players[i].entitiy_id.value is entitiy_id.value
         {
             found_index = i;
             break;
@@ -180,9 +202,25 @@ func find_player(client game_client ref, id u32) (player game_player ref)
         found_index = client.player_count;
         var player = client.players[found_index] ref;
         player deref = {} game_player;
-        player.id = id;            
+        player.entitiy_id = entitiy_id;            
         client.player_count += 1;
     }
 
     return client.players[found_index] ref;
+}
+
+func find_network_entity(game game_state ref, network_id u32) (id game_entity_id)
+{
+    var entitiy_id game_entity_id;
+    loop var i u32; game.entity.count
+    {
+        if (not game.active[i]) or (game.network_id[i] is_not network_id)
+            continue;
+
+        entitiy_id.index_plus_one = i + 1;
+        entitiy_id.generation     = game.generation[i];
+        break;
+    }
+
+    return entitiy_id;
 }

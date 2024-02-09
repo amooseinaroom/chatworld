@@ -39,8 +39,9 @@ enum network_message_tag
     login;
     login_accept;
     login_reject;
-    movement;
-    position;
+    user_input;    
+    update_entity;
+    delete_entity;
     chat;
 }
 
@@ -69,20 +70,28 @@ struct network_message_login_reject
     expand base network_message_base;
 }
 
-struct network_message_movement
+struct network_message_user_input
 {
     expand base network_message_base;
 
     movement      vec2;
     delta_seconds f32;
+    do_attack     b8;
 }
 
-struct network_message_position
+struct network_message_update_entity
 {
     expand base network_message_base;
 
-    id       u32;
-    position vec2;
+    id     u32;
+    entity game_entity;
+}
+
+struct network_message_delete_entity
+{
+    expand base network_message_base;
+
+    id     u32; 
 }
 
 struct network_message_chat
@@ -97,12 +106,13 @@ type network_message_union union
 {
     expand base network_message_base;
 
-    login        network_message_login;
-    login_accept network_message_login_accept;
-    login_reject network_message_login_reject;
-    movement     network_message_movement;
-    position     network_message_position;
-    chat         network_message_chat;
+    login         network_message_login;
+    login_accept  network_message_login_accept;
+    login_reject  network_message_login_reject;
+    user_input    network_message_user_input;    
+    update_entity network_message_update_entity;
+    delete_entity network_message_delete_entity;
+    chat          network_message_chat;
 };
 
 func send(network platform_network ref, message network_message_union, send_socket platform_network_socket, address = {} platform_network_address)

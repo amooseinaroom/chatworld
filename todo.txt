@@ -18,5 +18,8 @@ day 2:
 day 3:
 
 * login name+password
-configure server address (check port forwarding)
+x configure server address (check port forwarding)
+
+day 4:
+* attack and push?
 harden text messages (ackknowledge system)
