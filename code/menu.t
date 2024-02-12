@@ -14,6 +14,7 @@ enum menu_layer
     text;
 }
 
+def name_color = [ 250, 250, 250, 255 ] rgba8;
 def idle_color = [ 50, 255, 255, 255 ] rgba8;
 def hot_color  = [ 255, 255, 50, 255 ] rgba8;
 def edit_color = [ 50, 255, 50, 255 ] rgba8;

@@ -1,6 +1,10 @@
 
 def default_server_port = 50881 cast(u16); // 18124 cast(u16); //51337 cast(u16);
 
+def heartbeat_period = 5.0;
+def heartbeats_per_seconds = 1.0 / heartbeat_period;
+def max_missed_heartbeats = 2;
+
 def max_player_count = 4;
 
 struct string255
@@ -39,7 +43,10 @@ enum network_message_tag
     login;
     login_accept;
     login_reject;
-    user_input;    
+    heartbeat;
+    user_input;   
+    add_player; 
+    remove_player;
     update_entity;
     delete_entity;
     chat;
@@ -70,6 +77,8 @@ struct network_message_login_reject
     expand base network_message_base;
 }
 
+type network_message_heartbeat network_message_base;
+
 struct network_message_user_input
 {
     expand base network_message_base;
@@ -77,6 +86,20 @@ struct network_message_user_input
     movement      vec2;
     delta_seconds f32;
     do_attack     b8;
+}
+
+struct network_message_add_player
+{
+    expand base network_message_base;
+
+    name              string255;
+    entity_network_id u32;
+}
+
+struct network_message_remove_player
+{
+    expand base network_message_base;    
+    entity_network_id u32;
 }
 
 struct network_message_update_entity
@@ -109,7 +132,10 @@ type network_message_union union
     login         network_message_login;
     login_accept  network_message_login_accept;
     login_reject  network_message_login_reject;
-    user_input    network_message_user_input;    
+    heartbeat     network_message_heartbeat;
+    user_input    network_message_user_input;   
+    add_player    network_message_add_player;
+    remove_player network_message_remove_player;
     update_entity network_message_update_entity;
     delete_entity network_message_delete_entity;
     chat          network_message_chat;
@@ -128,7 +154,10 @@ func receive(network platform_network ref, receive_socket platform_network_socke
     var buffer = value_to_u8_array(message);
     var buffer_used_byte_count usize;
     var result = platform_network_receive(network, receive_socket, buffer, buffer_used_byte_count ref, platform_network_timeout_milliseconds_zero);
-    assert(result.ok);
+
+    // we don't have connections that could fail, but win32 will indicate if a udp "connection" is lost running locally        
+    if not result.ok
+        return false, message, {} platform_network_address;
 
     if buffer_used_byte_count is_not type_byte_count(network_message_union)
         return false, message, {} platform_network_address;

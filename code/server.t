@@ -17,10 +17,14 @@ struct game_client_connection
 {
     address    platform_network_address;
     
-    entity_id  game_entity_id;
-    network_id u32;
-    user_id    u32;
+    entity_id         game_entity_id;
+    entity_network_id u32;
+    user_index    u32;
     do_update  b8;
+    is_new     b8;
+
+    heartbeat_timeout      f32;
+    missed_heartbeat_count u32;
 
     fireball_cooldown f32;
 
@@ -96,7 +100,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         if (found_index is u32_invalid_index) and (result.message.tag is_not network_message_tag.login)
             continue;
 
-        client = server.clients[found_index] ref;
+        if found_index is_not u32_invalid_index
+            client = server.clients[found_index] ref;
 
         switch result.message.tag
         case network_message_tag.login
@@ -132,7 +137,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     var is_loggind_in = false;
                     loop var i u32; server.client_count
                     {
-                        if server.clients[i].user_id is user_index
+                        if server.clients[i].user_index is user_index
                         {
                             is_loggind_in = true;
                             break;
@@ -151,9 +156,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         client = server.clients[found_index] ref;
                         client deref = {} game_client_connection;
                         client.address = result.address;
+                        client.is_new  = true;
 
-                        client.network_id = new_network_id(server);
-                        client.entity_id = add_player(game, client.network_id);
+                        client.entity_network_id = new_network_id(server);
+                        client.entity_id = add_player(game, client.entity_network_id);
                         server.client_count += 1;
                     }
                 }
@@ -185,11 +191,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             }
             else
             {
-                client.user_id = user_index;
+                client.user_index = user_index;
                 
                 var message network_message_union;
                 message.tag = network_message_tag.login_accept;
-                message.login_accept.id = client.network_id;
+                message.login_accept.id = client.entity_network_id;
                 send(network, message, server.socket, client.address);                        
             }
         }
@@ -214,18 +220,66 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
             client.do_update = true;
         }
+        case network_message_tag.heartbeat
+        {            
+        }
         case network_message_tag.chat
         {
             client.chat_message = result.message.chat.text;
             client.broadcast_chat_message = true;
         }
+
+        if client
+        {
+            client.heartbeat_timeout = 1;
+            client.missed_heartbeat_count = 0;
+        }
         
         print("Server: GOTTEM! % %\n", result.message.tag, result.address);
+    }
+
+    // disconnect users that missed too many heartbeats
+    loop var i u32; server.client_count
+    {
+        var client = server.clients[i] ref;
+        client.heartbeat_timeout -= delta_seconds * heartbeats_per_seconds;
+        if client.heartbeat_timeout <= 0
+        {
+            client.heartbeat_timeout += 1;
+            client.missed_heartbeat_count += 1;            
+        }
+    }
+
+    // send other users remove_player and remove client afterwards
+    loop var a u32; server.client_count
+    {
+        var client = server.clients[a] ref;
+
+        if client.missed_heartbeat_count > max_missed_heartbeats
+        {   
+            loop var b u32; server.client_count
+            {
+                var other = server.clients[b] ref;
+
+                var message network_message_union;
+                message.tag = network_message_tag.remove_player;
+                message.remove_player.entity_network_id = client.entity_network_id;                
+                send(network, message, server.socket, other.address);
+            }
+
+            print("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
+            remove(game, client.entity_id);
+            server.client_count -= 1;
+            server.clients[a] = server.clients[server.client_count];
+            a -= 1; // repeat index
+        }
     }
 
     loop var a u32; server.client_count
     {
         var client = server.clients[a] ref;
+
+        var client_name = server.users[client.user_index].name;
 
         loop var b u32; server.client_count
         {
@@ -234,11 +288,30 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             var entity = get(game, other.entity_id);
             assert(entity);
 
+            if client.is_new
+            {
+                var message network_message_union;
+
+                var other_name = server.users[other.user_index].name;
+
+                // tell other about client
+                message.tag = network_message_tag.add_player;
+                message.add_player.entity_network_id = client.entity_network_id;
+                message.add_player.name = client_name;
+                send(network, message, server.socket, other.address);
+                
+                // tell client about other
+                message.tag = network_message_tag.add_player;
+                message.add_player.entity_network_id = other.entity_network_id;
+                message.add_player.name = other_name; 
+                send(network, message, server.socket, client.address);
+            }
+
             if client.broadcast_chat_message
             {
                 var message network_message_union;
                 message.tag = network_message_tag.chat;
-                message.chat.id = client.network_id;
+                message.chat.id = client.entity_network_id;
                 message.chat.text = client.chat_message;
                 send(network, message, server.socket, other.address);
             }            
@@ -273,6 +346,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         var client = server.clients[a] ref;
         client.do_update = false;
         client.broadcast_chat_message = false;
+        client.is_new = false;
 
         if client.fireball_cooldown > 0
             client.fireball_cooldown -= delta_seconds;

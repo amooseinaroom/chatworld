@@ -123,7 +123,52 @@ func game_update program_update_type
     menu.ui = ui;
     menu.characters = { platform.character_count, platform.character_buffer.base } platform_character[];
 
+    var tiles_per_width = 20;
+    var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
+    var tile_size = ui.viewport_size.width / tiles_per_width;
+    
+    // reload and cycle font
+
+    // for testing purposes we want to view different fonts
+    def font_paths =
+    [
+        "assets/fonts/bodo-amat/Bodo Amat.ttf",
+        "assets/fonts/dinomouse/Dinomouse-Regular.otf",
+        "assets/fonts/new-era-casual/New Era Casual Regular.ttf",
+        "assets/fonts/stanberry/Stanberry.ttf",
+        "assets/fonts/super-kid/Super Kid.ttf"
+    ] string[];
+    
+    var global font_index u32 = 3; // stanberry
+    var font_changed = false;
+    if false // disable font cycling
+    {
+        if platform_key_was_pressed(platform, "T"[0])
+        {
+            font_index = (font_index + 1) mod font_paths.count;
+            font_changed = true;
+        }
+    }
+
+    {
+        var font_height = ceil(tile_size * 0.25) cast(s32);
+        if font_changed or (state.font.info.pixel_height is_not font_height)
+        {
+            temporary_end(memory, state.memory_reload_used_byte_count);
+
+            if state.font.atlas.handle
+                glDeleteTextures(1, state.font.atlas.handle ref);
+
+            state.font = {} ui_font;
+
+            init(state.font ref,  platform, memory, tmemory, font_paths[font_index], font_height, 1024);
+        }
+    }    
+    
     var font = state.font;
+
+    var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
+    print(ui, 10, font, cursor ref,  "fps: %\nfont: %\n", 1.0 / platform.delta_seconds, font_paths[font_index]);            
 
     if client.state is client_state.disconnected
     {
@@ -166,10 +211,7 @@ func game_update program_update_type
         {
             var game = client.game ref;
 
-            // update(platform, state);
-
-            var tiles_per_width = 20;
-            var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
+            // update(platform, state);        
 
             var player = client.players[0] ref;
 
@@ -211,7 +253,7 @@ func game_update program_update_type
 
                 movement = normalize_or_zero(movement);
 
-                var entity = get(game, player.entitiy_id);
+                var entity = get(game, player.entity_id);
 
                 var movement_speed = 6;
                 // player.position += movement * (movement_speed * platform.delta_seconds);
@@ -234,10 +276,7 @@ func game_update program_update_type
 
             // update(game, platform.delta_seconds);
 
-            var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
-            print(ui, 10, font, cursor ref,  "fps: %\nhello world\n", 1.0 / platform.delta_seconds);
-
-            var tile_size = ui.viewport_size.width / tiles_per_width;
+            
 
             var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
 
@@ -261,7 +300,7 @@ func game_update program_update_type
             loop var i u32; client.player_count
             {
                 var player = client.players[i];
-                var entity = get(game, player.entitiy_id);
+                var entity = get(game, player.entity_id);
                 var player_position = entity.position;
 
                 var box box2;
@@ -270,9 +309,11 @@ func game_update program_update_type
                 var color = [ 128, 128, 255, 255 ] rgba8;
                 draw_box(ui, 2, color, box);
 
+                print_aligned(ui, 10, name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", from_string255(player.name));
+
                 if player.chat_message_timeout > 0
                 {
-                    var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.2 ] vec2, [ 0.5, 0 ] vec2);
+                    var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.5 ] vec2, [ 0.5, 0 ] vec2);
 
                     var t = pow(player.chat_message_timeout, 0.25);
                     var alpha = (255 * t) cast(u8);

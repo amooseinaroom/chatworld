@@ -26,13 +26,18 @@ struct game_client
     chat_message      string255;
     send_chat_message b8;
     
-    entitiy_id game_entity_id;
+    entity_id game_entity_id;
     network_id u32;
+
+    heartbeat_timeout f32;
 }
 
 struct game_player
 {    
-    entitiy_id game_entity_id;
+    entity_id         game_entity_id;
+    entity_network_id u32;
+
+    name string255;
 
     chat_message         string255;
     chat_message_timeout f32;
@@ -62,6 +67,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 {
     var game = client.game ref;
 
+    var reset_heartbeat = false;
+
     loop var i u32; client.player_count
     {
         if client.players[i].chat_message_timeout > 0
@@ -82,15 +89,57 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 client.network_id = result.message.login_accept.id;
                 client.state = client_state.online;
 
-                var entitiy_id = add_player(game, client.network_id);                
+                var entity_id = add_player(game, client.network_id);                
                 client.player_count = 0;
-                find_player(client, entitiy_id);                
+                var player = find_player(client, entity_id);
+                assert(player);
+                player.name = client.user_name;
+                player.entity_network_id = client.network_id;
             }
         }
         case network_message_tag.login_reject
         {
             client.state = client_state.disconnected;
+        }
+        case network_message_tag.add_player
+        {
+            if client.state is_not client_state.online            
+                break;
+            
+            var message = result.message.add_player;
+            var entity_id = find_network_entity(game, message.entity_network_id);
+            if not entity_id.value          
+            {
+                entity_id = add_player(game, message.entity_network_id);
+                var player = find_player(client, entity_id);
+                if player
+                {
+                    player.name = message.name;
+                    player.entity_network_id = message.entity_network_id;
+                }
+                else                    
+                    remove(game, entity_id); // we could not add a player, so we remove the entity
+            }
+        }
+        case network_message_tag.remove_player
+        {
+            if client.state is_not client_state.online            
+                break;
 
+            var message = result.message.remove_player;
+
+            var found_index = u32_invalid_index;
+            loop var i u32; client.player_count
+            {
+                if client.players[i].entity_network_id is message.entity_network_id
+                {
+                    client.player_count -= 1;
+                    var entity_id = client.players[i].entity_id;
+                    remove(game, entity_id);
+                    client.players[i] = client.players[client.player_count];
+                    break;
+                }
+            }
         }
         case network_message_tag.update_entity
         {
@@ -99,11 +148,11 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             
             var message = result.message.update_entity;
                          
-            var entitiy_id = find_network_entity(game, message.id);
-            if not entitiy_id.value            
-                entitiy_id = add(game, message.entity.tag, message.id);            
+            var entity_id = find_network_entity(game, message.id);
+            if not entity_id.value            
+                entity_id = add(game, message.entity.tag, message.id);
 
-            var entity = get(game, entitiy_id);
+            var entity = get(game, entity_id);
             entity deref = message.entity;                        
         }
         case network_message_tag.delete_entity
@@ -113,9 +162,9 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             
             var message = result.message.delete_entity;
                          
-            var entitiy_id = find_network_entity(game, message.id);
-            if entitiy_id.value            
-                remove_for_real(game, entitiy_id);                
+            var entity_id = find_network_entity(game, message.id);
+            if entity_id.value            
+                remove_for_real(game, entity_id);                
         }
         case network_message_tag.chat
         {
@@ -124,10 +173,10 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             
             var message = result.message.chat;
             
-            var entitiy_id = find_network_entity(game, message.id);
-            assert(entitiy_id.value);
+            var entity_id = find_network_entity(game, message.id);
+            assert(entity_id.value);
 
-            var player = find_player(client, entitiy_id);
+            var player = find_player(client, entity_id);
             player.chat_message = message.text;
             player.chat_message_timeout = 1;
         }
@@ -165,6 +214,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.user_input = client.frame_input;            
             message.tag = network_message_tag.user_input; // frame_input has no tag set
             send(network, message, client.socket, client.server_address);
+            reset_heartbeat = true;
         }
 
         if client.send_chat_message
@@ -173,18 +223,36 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.tag = network_message_tag.chat;
             message.chat.text = client.chat_message;
             send(network, message, client.socket, client.server_address);   
+            reset_heartbeat = true;
         }
     }
 
     client.send_chat_message = false;
+
+    if reset_heartbeat
+    {
+        client.heartbeat_timeout = 1;        
+    }
+    else
+    {        
+        client.heartbeat_timeout -= delta_seconds * heartbeats_per_seconds;
+        if client.heartbeat_timeout <= 0
+        {
+            client.heartbeat_timeout += 1;
+
+            var message network_message_union;
+            message.tag = network_message_tag.heartbeat;            
+            send(network, message, client.socket, client.server_address);   
+        }
+    }
 }
 
-func find_player(client game_client ref, entitiy_id game_entity_id) (player game_player ref)
+func find_player(client game_client ref, entity_id game_entity_id) (player game_player ref)
 {
     var found_index = u32_invalid_index;
     loop var i u32; client.player_count
     {
-        if client.players[i].entitiy_id.value is entitiy_id.value
+        if client.players[i].entity_id.value is entity_id.value
         {
             found_index = i;
             break;
@@ -202,7 +270,7 @@ func find_player(client game_client ref, entitiy_id game_entity_id) (player game
         found_index = client.player_count;
         var player = client.players[found_index] ref;
         player deref = {} game_player;
-        player.entitiy_id = entitiy_id;            
+        player.entity_id = entity_id;            
         client.player_count += 1;
     }
 
@@ -211,16 +279,16 @@ func find_player(client game_client ref, entitiy_id game_entity_id) (player game
 
 func find_network_entity(game game_state ref, network_id u32) (id game_entity_id)
 {
-    var entitiy_id game_entity_id;
+    var entity_id game_entity_id;
     loop var i u32; game.entity.count
     {
         if (not game.active[i]) or (game.network_id[i] is_not network_id)
             continue;
 
-        entitiy_id.index_plus_one = i + 1;
-        entitiy_id.generation     = game.generation[i];
+        entity_id.index_plus_one = i + 1;
+        entity_id.generation     = game.generation[i];
         break;
     }
 
-    return entitiy_id;
+    return entity_id;
 }
