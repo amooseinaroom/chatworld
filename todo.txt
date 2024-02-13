@@ -28,4 +28,11 @@ day 5:
 * add font scaling
 * detect disconnect/add heart-beat
 * replicate players
+
+day 6
+costomize character
+    pick body and name color
+    use sprites
+    upload sprites
+    
 harden text messages (acknowledge system)

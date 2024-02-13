@@ -61,8 +61,11 @@ struct network_message_login
 {
     expand base network_message_base;
 
-    name     string255;
-    password string255;
+    name      string255;
+    password  string255;
+
+    name_color rgba8;
+    body_color rgba8;
 }
 
 struct network_message_login_accept
@@ -93,6 +96,9 @@ struct network_message_add_player
     expand base network_message_base;
 
     name              string255;
+    name_color        rgba8;
+    body_color        rgba8;
+
     entity_network_id u32;
 }
 
@@ -167,3 +173,5 @@ func receive(network platform_network ref, receive_socket platform_network_socke
 
     return buffer_used_byte_count > 0, message, result.address;
 }
+
+type game_user_sprite rgba8[256 * 128];

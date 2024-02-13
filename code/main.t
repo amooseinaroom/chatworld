@@ -15,6 +15,18 @@ struct program_state
     client game_client;
 
     menu menu_state;
+    color_edit color_edit_tag;
+
+    user_sprite game_user_sprite;
+    user_sprite_texture gl_texture;
+    has_user_sprite b8;
+}
+
+enum color_edit_tag
+{
+    none;
+    name_color;
+    body_color;
 }
 
 func skip_space(iterator string ref)
@@ -39,6 +51,33 @@ func game_init program_init_type
     // client.server_address.ip.u8_values = [ 77, 64, 253, 6 ] u8[];
     // client.server_address.port = 50881;    
     
+    client.body_color.hue = random_f32_zero_to_one(state.random ref);
+    client.body_color.saturation = 1.0;
+    client.body_color.value      = 1.0;
+    client.body_color.alpha      = 1.0;
+    evaluate(client.body_color ref);
+
+    client.name_color.hue = random_f32_zero_to_one(state.random ref);
+    client.name_color.saturation = 1.0;
+    client.name_color.value      = 1.0;
+    client.name_color.alpha      = 1.0;
+    evaluate(client.name_color ref);
+
+    {
+        var result = try_platform_read_entire_file(platform, state.temporary_memory ref, client_save_state_path);
+        if result.ok and (result.data.count is type_byte_count(game_client_save_state))
+        {
+            var save_state = result.data.base cast(game_client_save_state ref) deref;
+            client.name_color = save_state.name_color;
+            client.body_color = save_state.body_color;
+            client.user_name = save_state.user_name;
+            client.user_name_edit.used_count = client.user_name.count;
+            client.user_name_edit.edit_offset = client.user_name_edit.used_count;
+            client.user_password = save_state.user_password;
+            client.user_password_edit.used_count = client.user_password.count;
+            client.user_password_edit.edit_offset = client.user_password_edit.used_count;
+        }
+    }
 
     if true
     {
@@ -168,12 +207,53 @@ func game_update program_update_type
     var font = state.font;
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
-    print(ui, 10, font, cursor ref,  "fps: %\nfont: %\n", 1.0 / platform.delta_seconds, font_paths[font_index]);            
+    print(ui, 10, font, cursor ref,  "fps: %\nfont: %\n", 1.0 / platform.delta_seconds, font_paths[font_index]);
+
+    var global load_sprite = true;
+
+    if load_sprite
+    {
+        load_sprite = false;
+
+        var sprite_path string;
+        var iterator = platform_file_search_init(platform, "customization/");
+        while platform_file_search_next(platform, iterator ref)
+        {
+            if iterator.found_file.is_directory
+                continue;
+
+            var path = iterator.found_file.relative_path;
+            sprite_path = path;
+            break;
+        }
+
+        if sprite_path.count
+        {
+            var result = try_platform_read_entire_file(platform, tmemory, sprite_path);
+            if result.ok
+            {
+                var width s32;
+                var height s32;
+                var irgnored s32;
+                stbi_set_flip_vertically_on_load(1);
+                var pixels = stbi_load_from_memory(result.data.base, result.data.count cast(s32), width ref, height ref, irgnored ref, 4);
+                var colors = { (width * height) cast(usize) * type_byte_count(rgba8), pixels } u8[];
+                if (width is 256) and (height is 128)
+                {
+                    copy_bytes(state.user_sprite.base, colors.base, state.user_sprite.count);
+                    state.has_user_sprite = true;
+                    state.user_sprite_texture = gl_create_texture_2d(width,height, false, colors);
+                }
+            }
+        }
+    }
 
     if client.state is client_state.disconnected
     {
+        draw_box(ui, -1000, [ 20, 20, 255, 255 ] rgba8, ui.scissor_box);
+
         var box = draw_box_begin(ui);
-        var cursor = cursor_below_position(font.info, ui.viewport_size.width * 0.5, ui.viewport_size.height * 0.5);
+        var cursor = cursor_below_position(font.info, ui.viewport_size.width * 0.5, ui.viewport_size.height * 0.75);
 
         print(ui, menu_layer.text, font, cursor ref, "user: ");
         edit255_begin(client.user_name_edit ref, client.user_name ref);
@@ -195,6 +275,66 @@ func game_update program_update_type
         if menu_button(menu, location_id(0), font, cursor ref, "Connect")
         {
             init(client, state.network ref, client.server_address);
+        }
+
+        if menu_button(menu, location_id(0), font, cursor ref, "Name Color")
+        {           
+            state.color_edit = color_edit_tag.name_color;
+        }
+
+        if menu_button(menu, location_id(0), font, cursor ref, "Body Color")
+        {           
+            state.color_edit = color_edit_tag.body_color;
+        }        
+
+        // display in-game character
+        {            
+            var box box2;
+            box.min.x = cursor.position.x;
+            box.max.y = cursor.position.y;
+            box.max.x = ceil(box.min.x + (tile_size * 1));
+            box.min.y = floor(box.max.y - (tile_size * 1));            
+            var color = to_rgba8(client.body_color.color);
+
+            // if false and state.has_user_sprite
+            if state.has_user_sprite
+            {
+                var texture_box box2;
+                texture_box.min = [ 0, 0 ] vec2;
+                texture_box.max = [ 128, 128 ] vec2;
+
+                // tile_size = box_size * texture_scale
+                var alignment = {} vec2;
+                var box_size = get_size(box);
+                // texture_scale = tile_size / box_size
+
+                var texture_scale = v2(box_size.width / 128);
+                draw_texture_box(ui, state.user_sprite_texture, box.min, texture_box, alignment, texture_scale);
+            }
+            else
+                draw_box(ui, 2, color, box);
+
+            print_aligned(ui, 3, to_rgba8(client.name_color.color), font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", from_string255(client.user_name));
+
+            cursor.position.y = box.min.y cast(s32);
+            advance_line(font.info, cursor ref);
+        }
+
+        if state.color_edit is_not color_edit_tag.none
+        {
+            var box box2;
+            box.min.x = cursor.position.x;
+            box.max.y = cursor.position.y;
+            box.max.x = ceil(box.min.x + (tile_size * 2));
+            box.min.y = floor(box.max.y - (tile_size * 2));
+
+            var colors = 
+            [
+                client.name_color ref,
+                client.body_color ref,
+            ] color_hsva ref[];
+
+            color_wheel(ui, 0, location_id(0), box, colors[state.color_edit - 1], false);
         }
     }
     else
@@ -305,11 +445,10 @@ func game_update program_update_type
 
                 var box box2;
                 box.min = floor({ player_position.x - 0.5, player_position.y } vec2 * tile_size) + tile_offset;
-                box.max = ceil(box.min + tile_size);
-                var color = [ 128, 128, 255, 255 ] rgba8;
-                draw_box(ui, 2, color, box);
+                box.max = ceil(box.min + tile_size);                
+                draw_box(ui, 2, player.body_color, box);
 
-                print_aligned(ui, 10, name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", from_string255(player.name));
+                print_aligned(ui, 10, player.name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", from_string255(player.name));
 
                 if player.chat_message_timeout > 0
                 {
@@ -408,6 +547,13 @@ func game_update program_update_type
 
     if platform.do_quit
     {
+        var save_state game_client_save_state;
+        save_state.name_color = client.name_color;
+        save_state.body_color = client.body_color;
+        save_state.user_name = client.user_name;
+        save_state.user_password = client.user_password;
+
+        platform_write_entire_file(platform, client_save_state_path, value_to_u8_array(save_state));
     }
 
     return true;

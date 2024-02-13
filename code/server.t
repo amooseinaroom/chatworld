@@ -16,6 +16,9 @@ struct game_server
 struct game_client_connection
 {
     address    platform_network_address;
+
+    name_color rgba8;
+    body_color rgba8;
     
     entity_id         game_entity_id;
     entity_network_id u32;
@@ -35,7 +38,7 @@ struct game_client_connection
 struct game_user
 {
     name     string255;
-    password string255;
+    password string255;    
 }
 
 struct game_user_buffer
@@ -157,6 +160,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         client deref = {} game_client_connection;
                         client.address = result.address;
                         client.is_new  = true;
+
+                        client.name_color = message.name_color;
+                        client.body_color = message.body_color;
 
                         client.entity_network_id = new_network_id(server);
                         client.entity_id = add_player(game, client.entity_network_id);
@@ -298,12 +304,16 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.tag = network_message_tag.add_player;
                 message.add_player.entity_network_id = client.entity_network_id;
                 message.add_player.name = client_name;
+                message.add_player.name_color = client.name_color;
+                message.add_player.body_color = client.body_color;
                 send(network, message, server.socket, other.address);
                 
                 // tell client about other
                 message.tag = network_message_tag.add_player;
                 message.add_player.entity_network_id = other.entity_network_id;
                 message.add_player.name = other_name; 
+                message.add_player.name_color = other.name_color;
+                message.add_player.body_color = other.body_color;
                 send(network, message, server.socket, client.address);
             }
 

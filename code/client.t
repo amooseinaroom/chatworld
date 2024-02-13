@@ -19,6 +19,9 @@ struct game_client
     user_name_edit editable_text;
     user_name      string255;    
     
+    name_color color_hsva;
+    body_color color_hsva;
+
     user_password_edit editable_text;
     user_password      string255;    
 
@@ -32,12 +35,24 @@ struct game_client
     heartbeat_timeout f32;
 }
 
+struct game_client_save_state
+{
+    name_color    color_hsva;
+    body_color    color_hsva;
+    user_name     string255;    
+    user_password string255;    
+}
+
+def client_save_state_path = "client_save_state.bin";
+
 struct game_player
 {    
     entity_id         game_entity_id;
     entity_network_id u32;
 
-    name string255;
+    name       string255;
+    name_color rgba8;
+    body_color rgba8;
 
     chat_message         string255;
     chat_message_timeout f32;
@@ -60,7 +75,7 @@ func init(client game_client ref, network platform_network ref, server_address p
 
     print("Client Up and Running!\n");
     client.state = client_state.connected;
-    client.server_address = server_address;
+    client.server_address = server_address;    
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
@@ -89,11 +104,15 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 client.network_id = result.message.login_accept.id;
                 client.state = client_state.online;
 
+                // adding a player here is a bit redundant and needs to be the same as in
+                // add_player message
                 var entity_id = add_player(game, client.network_id);                
                 client.player_count = 0;
                 var player = find_player(client, entity_id);
                 assert(player);
-                player.name = client.user_name;
+                player.name = client.user_name;             
+                player.name_color = to_rgba8(client.name_color.color);
+                player.body_color = to_rgba8(client.body_color.color);   
                 player.entity_network_id = client.network_id;
             }
         }
@@ -114,7 +133,9 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 var player = find_player(client, entity_id);
                 if player
                 {
-                    player.name = message.name;
+                    player.name       = message.name;
+                    player.name_color = message.name_color;
+                    player.body_color = message.body_color;
                     player.entity_network_id = message.entity_network_id;
                 }
                 else                    
@@ -201,6 +222,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.tag = network_message_tag.login;
             message.login.name     = client.user_name;
             message.login.password = client.user_password;
+            message.login.name_color = to_rgba8(client.name_color.color);
+            message.login.body_color = to_rgba8(client.body_color.color);
             
             send(network, message, client.socket, client.server_address);
             print("Client: reconnecting\n");
