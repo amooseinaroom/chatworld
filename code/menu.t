@@ -23,7 +23,7 @@ func menu_button(menu menu_state ref, id ui_id, font ui_font, cursor font_cursor
 {
     var ui = menu.ui;
 
-	var box = draw_box_begin(ui);	
+	var box = draw_box_begin(ui);
 	print(ui, menu_layer.text, font, cursor, text);
 	box = draw_box_end(ui, box);
 
@@ -33,7 +33,7 @@ func menu_button(menu menu_state ref, id ui_id, font ui_font, cursor font_cursor
     var color = idle_color;
     if id_is_hot(ui, id) or id_is_active(ui, id)
         color = hot_color;
-	
+
 	draw_rounded_box(ui, menu_layer.back, color, grow(box, 8), 6);
 
 	return button(ui, id, box, 0);
@@ -66,7 +66,7 @@ func menu_text_edit(menu menu_state ref, id ui_id, font ui_font, cursor font_cur
 
     // box.max.y = maximum(box.max.y, box.min.y + 10);
     box.max.x = maximum(box.max.x, box.min.x + 100);
-	
+
 	draw_rounded_box(ui, menu_layer.back, color, grow(box, 8), 6);
 
     var ok = button(ui, id, box, 0);

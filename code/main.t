@@ -6,7 +6,7 @@ def game_title = "chat world";
 struct program_state
 {
     expand default default_program_state;
-    
+
     network platform_network;
 
     is_host b8;
@@ -19,7 +19,10 @@ struct program_state
 
     user_sprite game_user_sprite;
     user_sprite_texture gl_texture;
-    has_user_sprite b8;
+    user_sprite_index_plus_one u32;
+
+    sprite_view_direction          game_sprite_view_direction;
+    sprite_view_diretcion_timeout f32;
 }
 
 enum color_edit_tag
@@ -36,7 +39,7 @@ func skip_space(iterator string ref)
 
 func game_init program_init_type
 {
-    state.letterbox_width_over_heigth = 16.0 / 9.0;    
+    state.letterbox_width_over_heigth = 16.0 / 9.0;
 
     platform_network_init(state.network ref);
 
@@ -49,8 +52,8 @@ func game_init program_init_type
     init(state.server.game ref);
 
     // client.server_address.ip.u8_values = [ 77, 64, 253, 6 ] u8[];
-    // client.server_address.port = 50881;    
-    
+    // client.server_address.port = 50881;
+
     client.body_color.hue = random_f32_zero_to_one(state.random ref);
     client.body_color.saturation = 1.0;
     client.body_color.value      = 1.0;
@@ -106,13 +109,13 @@ func game_init program_init_type
                     var value u32;
                     if not try_parse_u32(value ref, it ref) or (value > 255)
                         assert(false);
-                    
+
                     server_ip[i] = value cast(u8);
 
                     if (i < 3) and not try_skip(it ref, ".")
-                        assert(false);                                        
+                        assert(false);
                 }
-                
+
                 skip_space(it ref);
             }
             else if  try_skip(it ref, "dns")
@@ -121,15 +124,15 @@ func game_init program_init_type
                 assert(dns.count);
             }
             else
-                assert(false);            
+                assert(false);
 
             if not try_parse_u32(port ref, it ref) or (port > 65535)
-                assert(false);                     
+                assert(false);
 
             skip_space(it ref);
             break;
         }
-        
+
         client.server_address.port = port cast(u16);
 
         if dns.count
@@ -156,7 +159,7 @@ func game_update program_update_type
 {
     var memory  = state.memory ref;
     var tmemory = state.temporary_memory ref;
-    var ui      = state.ui ref;    
+    var ui      = state.ui ref;
     var client  = state.client ref;
     var menu = state.menu ref;
     menu.ui = ui;
@@ -165,7 +168,7 @@ func game_update program_update_type
     var tiles_per_width = 20;
     var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
     var tile_size = ui.viewport_size.width / tiles_per_width;
-    
+
     // reload and cycle font
 
     // for testing purposes we want to view different fonts
@@ -177,7 +180,7 @@ func game_update program_update_type
         "assets/fonts/stanberry/Stanberry.ttf",
         "assets/fonts/super-kid/Super Kid.ttf"
     ] string[];
-    
+
     var global font_index u32 = 3; // stanberry
     var font_changed = false;
     if false // disable font cycling
@@ -202,51 +205,12 @@ func game_update program_update_type
 
             init(state.font ref,  platform, memory, tmemory, font_paths[font_index], font_height, 1024);
         }
-    }    
-    
+    }
+
     var font = state.font;
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
     print(ui, 10, font, cursor ref,  "fps: %\nfont: %\n", 1.0 / platform.delta_seconds, font_paths[font_index]);
-
-    var global load_sprite = true;
-
-    if load_sprite
-    {
-        load_sprite = false;
-
-        var sprite_path string;
-        var iterator = platform_file_search_init(platform, "customization/");
-        while platform_file_search_next(platform, iterator ref)
-        {
-            if iterator.found_file.is_directory
-                continue;
-
-            var path = iterator.found_file.relative_path;
-            sprite_path = path;
-            break;
-        }
-
-        if sprite_path.count
-        {
-            var result = try_platform_read_entire_file(platform, tmemory, sprite_path);
-            if result.ok
-            {
-                var width s32;
-                var height s32;
-                var irgnored s32;
-                stbi_set_flip_vertically_on_load(1);
-                var pixels = stbi_load_from_memory(result.data.base, result.data.count cast(s32), width ref, height ref, irgnored ref, 4);
-                var colors = { (width * height) cast(usize) * type_byte_count(rgba8), pixels } u8[];
-                if (width is 256) and (height is 128)
-                {
-                    copy_bytes(state.user_sprite.base, colors.base, state.user_sprite.count);
-                    state.has_user_sprite = true;
-                    state.user_sprite_texture = gl_create_texture_2d(width,height, false, colors);
-                }
-            }
-        }
-    }
 
     if client.state is client_state.disconnected
     {
@@ -266,7 +230,7 @@ func game_update program_update_type
         edit255_end(client.user_password_edit, client.user_password ref);
 
         if menu_button(menu, location_id(0), font, cursor ref, "Host")
-        {            
+        {
             init(state.server ref, platform, state.network ref, client.server_address.port, tmemory);
             init(client, state.network ref, client.server_address);
             state.is_host = true;
@@ -278,43 +242,102 @@ func game_update program_update_type
         }
 
         if menu_button(menu, location_id(0), font, cursor ref, "Name Color")
-        {           
+        {
             state.color_edit = color_edit_tag.name_color;
         }
 
         if menu_button(menu, location_id(0), font, cursor ref, "Body Color")
-        {           
+        {
             state.color_edit = color_edit_tag.body_color;
-        }        
+        }
+
+        var load_sprite = false;
+
+        if menu_button(menu, location_id(0), font, cursor ref, "previous sprite")
+        {
+            state.user_sprite_index_plus_one -= 1;
+            load_sprite = true;
+        }
+
+        if menu_button(menu, location_id(0), font, cursor ref, "next sprite")
+        {
+            state.user_sprite_index_plus_one += 1;
+            load_sprite = true;
+        }
+
+        label load_sprite_label
+        {
+            if load_sprite
+            {
+                var sprite_path string;
+                var iterator = platform_file_search_init(platform, "customization/");
+                var index u32;
+                while platform_file_search_next(platform, iterator ref)
+                {
+                    if iterator.found_file.is_directory
+                        continue;
+
+                    var path = iterator.found_file.relative_path;
+
+                    var split = split_path(path);
+                    if split.extension is_not "png" or not starts_with(split.name, "character_")
+                        continue;
+
+                    index += 1;
+
+                    if (index is state.user_sprite_index_plus_one) or (state.user_sprite_index_plus_one is u32_invalid_index)
+                        sprite_path = path;
+
+                    if (index is state.user_sprite_index_plus_one)
+                        break;
+                }
+
+                if state.user_sprite_index_plus_one is u32_invalid_index
+                    state.user_sprite_index_plus_one = index;
+                else if state.user_sprite_index_plus_one > index
+                    state.user_sprite_index_plus_one = 0;
+
+                if state.user_sprite_index_plus_one is 0
+                    break load_sprite_label;
+
+                if sprite_path.count
+                {
+                    var result = try_platform_read_entire_file(platform, tmemory, sprite_path);
+                    if result.ok
+                    {
+                        var width s32;
+                        var height s32;
+                        var irgnored s32;
+                        stbi_set_flip_vertically_on_load(1);
+                        var pixels = stbi_load_from_memory(result.data.base, result.data.count cast(s32), width ref, height ref, irgnored ref, 4);
+                        var colors = { (width * height) cast(usize) * type_byte_count(rgba8), pixels } u8[];
+                        if (width is 256) and (height is 128)
+                        {
+                            copy_bytes(state.user_sprite.base, colors.base, state.user_sprite.count);
+                            state.user_sprite_texture = gl_create_texture_2d(width,height, false, colors);
+                        }
+                    }
+                }
+            }
+        }
+
+        state.sprite_view_diretcion_timeout -= platform.delta_seconds * 2;
+        if state.sprite_view_diretcion_timeout <= 0
+        {
+            state.sprite_view_diretcion_timeout += 1.0;
+
+            state.sprite_view_direction = (state.sprite_view_direction + 1) mod game_sprite_view_direction.count;
+        }
 
         // display in-game character
-        {            
-            var box box2;
-            box.min.x = cursor.position.x;
-            box.max.y = cursor.position.y;
-            box.max.x = ceil(box.min.x + (tile_size * 1));
-            box.min.y = floor(box.max.y - (tile_size * 1));            
-            var color = to_rgba8(client.body_color.color);
+        {
+            var position = v2(cursor.position) - [ 0,  tile_size ] vec2;
+            var sprite_texture_box box2;
+            sprite_texture_box.min = [ 0, 0 ] vec2;
+            sprite_texture_box.max = [ 128, 128 ] vec2;
 
-            // if false and state.has_user_sprite
-            if state.has_user_sprite
-            {
-                var texture_box box2;
-                texture_box.min = [ 0, 0 ] vec2;
-                texture_box.max = [ 128, 128 ] vec2;
-
-                // tile_size = box_size * texture_scale
-                var alignment = {} vec2;
-                var box_size = get_size(box);
-                // texture_scale = tile_size / box_size
-
-                var texture_scale = v2(box_size.width / 128);
-                draw_texture_box(ui, state.user_sprite_texture, box.min, texture_box, alignment, texture_scale);
-            }
-            else
-                draw_box(ui, 2, color, box);
-
-            print_aligned(ui, 3, to_rgba8(client.name_color.color), font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", from_string255(client.user_name));
+            var box = draw_player(ui, position, tile_size, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+            draw_player_name(ui, font, position, tile_size, from_string255(client.user_name), to_rgba8(client.name_color.color));
 
             cursor.position.y = box.min.y cast(s32);
             advance_line(font.info, cursor ref);
@@ -328,7 +351,7 @@ func game_update program_update_type
             box.max.x = ceil(box.min.x + (tile_size * 2));
             box.min.y = floor(box.max.y - (tile_size * 2));
 
-            var colors = 
+            var colors =
             [
                 client.name_color ref,
                 client.body_color ref,
@@ -344,18 +367,18 @@ func game_update program_update_type
             tick(platform, state.server ref, state.network ref, platform.delta_seconds);
             update(state.server.game ref, platform.delta_seconds);
         }
-    
-        tick(client, state.network ref, platform.delta_seconds);                
+
+        tick(client, state.network ref, platform.delta_seconds);
 
         if (client.state is client_state.online)
         {
             var game = client.game ref;
 
-            // update(platform, state);        
+            // update(platform, state);
 
             var player = client.players[0] ref;
 
-            client.frame_input = {} network_message_user_input;        
+            client.frame_input = {} network_message_user_input;
 
             if game.is_chatting
             {
@@ -412,11 +435,11 @@ func game_update program_update_type
                     game.camera_position.y = entity.position.y - (tiles_per_height * 0.5) + tile_frame;
                 else if entity.position.y < (game.camera_position.y - (tiles_per_height * 0.5) + tile_frame - 1)
                     game.camera_position.y = entity.position.y + (tiles_per_height * 0.5) - tile_frame + 1;
-            }                    
+            }
 
             // update(game, platform.delta_seconds);
 
-            
+
 
             var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
 
@@ -433,7 +456,7 @@ func game_update program_update_type
                     ] rgba8[];
 
                     var color = colors[(x + y) bit_and 1];
-                    draw_box(ui, 1, color, box);
+                    draw_box(ui, game_render_layer.ground, color, box);
                 }
             }
 
@@ -441,14 +464,16 @@ func game_update program_update_type
             {
                 var player = client.players[i];
                 var entity = get(game, player.entity_id);
-                var player_position = entity.position;
 
-                var box box2;
-                box.min = floor({ player_position.x - 0.5, player_position.y } vec2 * tile_size) + tile_offset;
-                box.max = ceil(box.min + tile_size);                
-                draw_box(ui, 2, player.body_color, box);
+                var position = entity.position;
+                position = floor({ position.x - 0.5, position.y } vec2 * tile_size) + tile_offset;
 
-                print_aligned(ui, 10, player.name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", from_string255(player.name));
+                var sprite_texture_box box2;
+                sprite_texture_box.min = [ 0, 0 ] vec2;
+                sprite_texture_box.max = [ 128, 128 ] vec2;
+
+                var box = draw_player(ui, position, tile_size, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+                draw_player_name(ui, font, position, tile_size, from_string255(player.name), player.name_color);
 
                 if player.chat_message_timeout > 0
                 {
@@ -486,7 +511,7 @@ func game_update program_update_type
                     var right = { text.count - left.count, left.base + left.count } string;
 
                     print(ui, 11, text_color, font, cursor ref, left);
-                    
+
                     {
                         var box box2;
                         box.min = [ cursor.x, cursor.y - font.info.bottom_margin ] vec2;
@@ -529,7 +554,7 @@ func game_update program_update_type
             {
                 if not game.active[i]
                 continue;
-            
+
                 var entity = game.entity[i] ref;
 
                 switch entity.tag
@@ -540,7 +565,7 @@ func game_update program_update_type
                     box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
                     var color = [ 255, 128, 25, 255 ] rgba8;
                     draw_box(ui, 2, color, box);
-                }            
+                }
             }
         }
     }
@@ -572,4 +597,66 @@ func edit255_end(text_edit editable_text, text string255 ref)
 
 enum render_texture_slot render_texture_slot_base
 {
+}
+
+def player_draw_alignment = [ 0.5, 8.0 / 128.0 ] vec2;
+
+func get_player_box(position vec2, tile_size f32) (box box2)
+{
+    var alignment = player_draw_alignment;
+
+    var box box2;
+    var box_size = v2(ceil(tile_size));
+    box.min = floor(position - scale(box_size, alignment));
+    box.max = box.min + box_size;
+    return box;
+}
+
+enum game_render_layer
+{
+    ground;
+    entity;
+    overlay;
+}
+
+func draw_player_name(ui ui_system ref, font ui_font, position vec2, tile_size f32, name string, name_color rgba8)
+{
+    var box = get_player_box(position, tile_size);
+    print_aligned(ui, game_render_layer.overlay, name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", name);
+}
+
+func draw_player(ui ui_system ref, position vec2, tile_size f32, body_color rgba8, use_sprite b8, sprite_texture gl_texture, sprite_texture_box box2, view_direction game_sprite_view_direction) (box box2)
+{
+    var box = get_player_box(position, tile_size);
+
+    // if false and state.has_user_sprite
+    if use_sprite
+    {
+        var texture_scale = v2((box.max.x - box.min.x) / 128);
+
+        // use back
+        // assuming spirte front and back are stored together
+        if view_direction >= game_sprite_view_direction.back_right
+        {
+            sprite_texture_box.min.x += 128;
+            sprite_texture_box.max.x += 128;
+        }
+
+        // flip x if looking right
+        var flip_x = (((view_direction + game_sprite_view_direction.count - 1) mod game_sprite_view_direction.count) < 2) is_not 0;
+        var alignment = player_draw_alignment;
+        draw_texture_box(ui, game_render_layer.entity, 1.0, rgba8_white, sprite_texture, position, sprite_texture_box, alignment, texture_scale, flip_x);
+    }
+    else
+    {
+        var player_box box2;
+        var size = ceil(tile_size * 96 / 128);
+        player_box.min.y = box.min.y + floor(tile_size * 8 / 128);
+        player_box.max.y = player_box.min.y + size;
+        player_box.min.x = floor((box.max.x + box.min.x) * 0.5 - (size * 0.5));
+        player_box.max.x = player_box.min.x + size;
+        draw_box(ui, game_render_layer.entity, body_color, player_box);
+    }
+
+    return box;
 }

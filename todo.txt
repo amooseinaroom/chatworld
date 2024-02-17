@@ -21,18 +21,27 @@ day 3:
 x configure server address (check port forwarding)
 
 day 4:
+
 * entity system
 * spawn "fireball"
 
 day 5:
+
 * add font scaling
 * detect disconnect/add heart-beat
 * replicate players
 
-day 6
-costomize character
-    pick body and name color
-    use sprites
-    upload sprites
-    
+day 6:
+
+* costomize character
+    * pick body and name color
+
+day 7: (offline)
+
+* sprite selection and turn around
+* use sprites locally
+
+next
+
+upload sprites
 harden text messages (acknowledge system)

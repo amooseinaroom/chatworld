@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.1.1 (3bf5ae0d25, 2021-09-20)"
+   sodipodi:docname="character_template.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="true"
+     inkscape:snap-center="true"
+     inkscape:zoom="4.5834137"
+     inkscape:cx="321.59436"
+     inkscape:cy="449.99211"
+     inkscape:window-width="2560"
+     inkscape:window-height="1377"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1">
+    <inkscape:grid
+       type="xygrid"
+       id="grid824" />
+  </sodipodi:namedview>
+  <defs
+     id="defs2" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:#b2b2b2;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round;fill-opacity:0.14797136"
+       id="rect848"
+       width="33.866665"
+       height="33.866665"
+       x="50.270832"
+       y="95.25" />
+    <rect
+       style="fill:#b2b2b2;fill-opacity:0.147971;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       id="rect6306"
+       width="33.866665"
+       height="33.866665"
+       x="84.137497"
+       y="95.25" />
+    <circle
+       style="fill:#4669b2;fill-opacity:0.58472556;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       id="path940"
+       cx="67.204163"
+       cy="114.3"
+       r="12.7" />
+    <path
+       style="fill:none;stroke:#bbbbbb;stroke-width:0.26458333;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;stroke-miterlimit:4;stroke-dasharray:none"
+       d="M 84.1375,93.927083 V 130.70417"
+       id="path1368" />
+    <path
+       style="fill:none;stroke:#bbbbbb;stroke-width:0.264583;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 49.477083,127 H 119.59167"
+       id="path1568" />
+    <circle
+       style="fill:#4669b2;fill-opacity:0.584726;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       id="circle6308"
+       cx="101.07082"
+       cy="114.3"
+       r="12.7" />
+    <path
+       style="fill:none;stroke:#bbbbbb;stroke-width:0.264583;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="M 49.080208,114.3 H 119.19479"
+       id="path1650" />
+    <path
+       style="fill:none;stroke:#bbbbbb;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 67.204167,93.927083 V 130.96875"
+       id="path1685" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:2.82222px;line-height:1.25;font-family:sans-serif;fill:#bbbbbb;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="51.206528"
+       y="98.953476"
+       id="text3015"><tspan
+         sodipodi:role="line"
+         id="tspan3013"
+         style="font-size:2.82222px;stroke-width:0.264583;fill:#bbbbbb;fill-opacity:1"
+         x="51.206528"
+         y="98.953476">Front Left</tspan></text>
+    <path
+       style="fill:none;stroke:#bbbbbb;stroke-width:0.264583px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="M 101.07083,93.927083 V 130.96875"
+       id="path6310" />
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:2.82222px;line-height:1.25;font-family:sans-serif;fill:#bbbbbb;fill-opacity:1;stroke:none;stroke-width:0.264583"
+       x="85.073189"
+       y="98.953476"
+       id="text6314"><tspan
+         sodipodi:role="line"
+         id="tspan6312"
+         style="font-size:2.82222px;fill:#bbbbbb;fill-opacity:1;stroke-width:0.264583"
+         x="85.073189"
+         y="98.953476">Back Left</tspan></text>
+  </g>
+</svg>

@@ -5,7 +5,7 @@ struct game_client
     game game_state;
 
     socket platform_network_socket;
-    
+
     server_address platform_network_address;
 
     state client_state;
@@ -17,45 +17,172 @@ struct game_client
     player_count u32;
 
     user_name_edit editable_text;
-    user_name      string255;    
-    
+    user_name      string255;
+
     name_color color_hsva;
     body_color color_hsva;
 
     user_password_edit editable_text;
-    user_password      string255;    
+    user_password      string255;
 
     chat_message_edit editable_text;
     chat_message      string255;
     send_chat_message b8;
-    
+
     entity_id game_entity_id;
     network_id u32;
 
     heartbeat_timeout f32;
+
+    sprite_atlas gl_texture;
+
+    pending_sprite game_user_sprite;
+}
+
+type game_sprite_atlas_id union
+{
+    expand pair struct
+    {
+        generation     u32;
+        index_plus_one u32;
+    };
+
+    value u64;
+};
+
+struct game_sprite_atlas
+{
+    texture gl_texture;
+    generation         u32[256];
+    unused_frame_count u32[256];
+    freelist           u32[256];
+    used_count         u32;
+}
+
+func frame(atlas game_sprite_atlas ref)
+{
+    loop var i u32; atlas.freelist.count
+    {
+        atlas.unused_frame_count[i] += 1;
+
+        // free on overlow
+        if not atlas.unused_frame_count[i]
+        {
+            loop var j u32; atlas.used_count
+            {
+                if atlas.freelist[j] is i
+                {
+                    atlas.used_count -= 1;
+                    atlas.freelist[atlas.used_count] = i;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+func get_sprite_position(atlas game_sprite_atlas ref, index u32) (x s32, y s32)
+{
+    var row_count = atlas.texture.width / 256;
+
+    var y = ((index / row_count) * 128) cast(s32);
+    var x = ((index mod row_count) * 256) cast(s32);
+    return x, y;
+}
+
+func add_sprite(atlas game_sprite_atlas ref, sprite game_user_sprite ref) (id game_sprite_atlas_id)
+{
+    if (atlas.used_count >= atlas.freelist.count)
+        return {} game_sprite_atlas_id;
+
+    var index = atlas.freelist[atlas.used_count];
+    atlas.used_count += 1;
+
+    atlas.generation[index] += 1;
+
+    var position = get_sprite_position(atlas, index);
+
+    glBindTexture(GL_TEXTURE_2D, atlas.texture.handle);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, position.x, position.y, 256, 128, GL_RGBA, GL_UNSIGNED_BYTE, sprite.base);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    return { atlas.generation[index], index + 1 } game_sprite_atlas_id;
+}
+
+func remove_sprite(atlas game_sprite_atlas ref, id game_sprite_atlas_id)
+{
+    if not id.index_plus_one
+        return;
+
+    assert(id.index_plus_one < atlas.freelist.count);
+    var index = id.index_plus_one - 1;
+
+    if atlas.generation[index] is_not id.generation
+        return;
+
+    atlas.generation[index] += 1;
+
+    assert(atlas.used_count);
+    atlas.used_count -= 1;
+    atlas.freelist[atlas.used_count] = index;
+}
+
+func get_sprite(atlas game_sprite_atlas ref, id game_sprite_atlas_id) (ok b8, texture_box box2)
+{
+    if not id.index_plus_one
+        return false, {} box2;
+
+    assert(id.index_plus_one < atlas.freelist.count);
+    var index = id.index_plus_one - 1;
+
+    if atlas.generation[index] is_not id.generation
+        return false, {} box2;
+
+    // reset unused frame count
+    atlas.unused_frame_count[index] = 0;
+
+    var position = get_sprite_position(atlas, index);
+    var texture_box box2;
+    texture_box.min.x = position.x;
+    texture_box.min.y = position.y;
+    texture_box.max.x = texture_box.min.x + 256;
+    texture_box.max.y = texture_box.min.y + 128;
+
+    return true, texture_box;
 }
 
 struct game_client_save_state
 {
     name_color    color_hsva;
     body_color    color_hsva;
-    user_name     string255;    
-    user_password string255;    
+    user_name     string255;
+    user_password string255;
+    sprite_path   string255;
+}
+
+enum game_sprite_view_direction
+{
+    front_left;
+    front_right;
+    back_right;
+    back_left;
 }
 
 def client_save_state_path = "client_save_state.bin";
 
 struct game_player
-{    
-    entity_id         game_entity_id;
-    entity_network_id u32;
-
+{
     name       string255;
     name_color rgba8;
     body_color rgba8;
 
     chat_message         string255;
     chat_message_timeout f32;
+
+    entity_id         game_entity_id;
+    entity_network_id u32;
+
+    sprite_index_plus_one u32;
 }
 
 enum client_state
@@ -66,7 +193,7 @@ enum client_state
 }
 
 func init(client game_client ref, network platform_network ref, server_address platform_network_address)
-{   
+{
     if not platform_network_is_valid(client.socket)
     {
         client.socket = platform_network_bind(network);
@@ -75,7 +202,7 @@ func init(client game_client ref, network platform_network ref, server_address p
 
     print("Client Up and Running!\n");
     client.state = client_state.connected;
-    client.server_address = server_address;    
+    client.server_address = server_address;
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
@@ -106,13 +233,13 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
                 // adding a player here is a bit redundant and needs to be the same as in
                 // add_player message
-                var entity_id = add_player(game, client.network_id);                
+                var entity_id = add_player(game, client.network_id);
                 client.player_count = 0;
                 var player = find_player(client, entity_id);
                 assert(player);
-                player.name = client.user_name;             
+                player.name = client.user_name;
                 player.name_color = to_rgba8(client.name_color.color);
-                player.body_color = to_rgba8(client.body_color.color);   
+                player.body_color = to_rgba8(client.body_color.color);
                 player.entity_network_id = client.network_id;
             }
         }
@@ -122,12 +249,12 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         }
         case network_message_tag.add_player
         {
-            if client.state is_not client_state.online            
+            if client.state is_not client_state.online
                 break;
-            
+
             var message = result.message.add_player;
             var entity_id = find_network_entity(game, message.entity_network_id);
-            if not entity_id.value          
+            if not entity_id.value
             {
                 entity_id = add_player(game, message.entity_network_id);
                 var player = find_player(client, entity_id);
@@ -138,13 +265,13 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                     player.body_color = message.body_color;
                     player.entity_network_id = message.entity_network_id;
                 }
-                else                    
+                else
                     remove(game, entity_id); // we could not add a player, so we remove the entity
             }
         }
         case network_message_tag.remove_player
         {
-            if client.state is_not client_state.online            
+            if client.state is_not client_state.online
                 break;
 
             var message = result.message.remove_player;
@@ -164,36 +291,36 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         }
         case network_message_tag.update_entity
         {
-            if client.state is_not client_state.online            
+            if client.state is_not client_state.online
                 break;
-            
+
             var message = result.message.update_entity;
-                         
+
             var entity_id = find_network_entity(game, message.id);
-            if not entity_id.value            
+            if not entity_id.value
                 entity_id = add(game, message.entity.tag, message.id);
 
             var entity = get(game, entity_id);
-            entity deref = message.entity;                        
+            entity deref = message.entity;
         }
         case network_message_tag.delete_entity
         {
-            if client.state is_not client_state.online            
+            if client.state is_not client_state.online
                 break;
-            
+
             var message = result.message.delete_entity;
-                         
+
             var entity_id = find_network_entity(game, message.id);
-            if entity_id.value            
-                remove_for_real(game, entity_id);                
+            if entity_id.value
+                remove_for_real(game, entity_id);
         }
         case network_message_tag.chat
         {
-            if client.state is_not client_state.online            
-                break;            
-            
+            if client.state is_not client_state.online
+                break;
+
             var message = result.message.chat;
-            
+
             var entity_id = find_network_entity(game, message.id);
             assert(entity_id.value);
 
@@ -211,7 +338,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
     }
     case client_state.connected
-    {        
+    {
         client.reconnect_timeout -= delta_seconds;
 
         if client.reconnect_timeout <= 0
@@ -224,17 +351,17 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.login.password = client.user_password;
             message.login.name_color = to_rgba8(client.name_color.color);
             message.login.body_color = to_rgba8(client.body_color.color);
-            
+
             send(network, message, client.socket, client.server_address);
             print("Client: reconnecting\n");
-        }                
+        }
     }
     case client_state.online
     {
         if client.frame_input.do_attack or (squared_length(client.frame_input.movement) > 0)
         {
             var message network_message_union;
-            message.user_input = client.frame_input;            
+            message.user_input = client.frame_input;
             message.tag = network_message_tag.user_input; // frame_input has no tag set
             send(network, message, client.socket, client.server_address);
             reset_heartbeat = true;
@@ -245,7 +372,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             var message network_message_union;
             message.tag = network_message_tag.chat;
             message.chat.text = client.chat_message;
-            send(network, message, client.socket, client.server_address);   
+            send(network, message, client.socket, client.server_address);
             reset_heartbeat = true;
         }
     }
@@ -254,18 +381,18 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
     if reset_heartbeat
     {
-        client.heartbeat_timeout = 1;        
+        client.heartbeat_timeout = 1;
     }
     else
-    {        
+    {
         client.heartbeat_timeout -= delta_seconds * heartbeats_per_seconds;
         if client.heartbeat_timeout <= 0
         {
             client.heartbeat_timeout += 1;
 
             var message network_message_union;
-            message.tag = network_message_tag.heartbeat;            
-            send(network, message, client.socket, client.server_address);   
+            message.tag = network_message_tag.heartbeat;
+            send(network, message, client.socket, client.server_address);
         }
     }
 }
@@ -293,7 +420,7 @@ func find_player(client game_client ref, entity_id game_entity_id) (player game_
         found_index = client.player_count;
         var player = client.players[found_index] ref;
         player deref = {} game_player;
-        player.entity_id = entity_id;            
+        player.entity_id = entity_id;
         client.player_count += 1;
     }
 
