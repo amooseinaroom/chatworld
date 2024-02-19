@@ -20,7 +20,8 @@ or
 6. In Visual Studio x64 Command Prompt run `build.bat`.
 
 ## continuous build
-1. In `build.bat` you can enable/disable debugging by setting `set debug=1` or `set debug=0` respectively.
-2. This project requires hot realoading building process, so always leave `set hot_code_reloading=1` as is.
-3. In `code\build\hot_reloading.t` you can enable/disable hot reloading by setting `override def enable_hot_reloading = true;` or `override def enable_hot_reloading = false;` respectively.
-4. In Visual Studio x64 Command Prompt run `build.bat`
+1. Pull the latest changes with `git pull --recurse-submodules`
+2. In `build.bat` you can enable/disable debugging by setting `set debug=1` or `set debug=0` respectively.
+3. This project requires hot realoading building process, so always leave `set hot_code_reloading=1` as is.
+4. In `code\build\hot_reloading.t` you can enable/disable hot reloading by setting `override def enable_hot_reloading = true;` or `override def enable_hot_reloading = false;` respectively.
+5. In Visual Studio x64 Command Prompt run `build.bat`
