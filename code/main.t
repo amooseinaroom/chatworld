@@ -2,6 +2,7 @@
 import network;
 
 def game_title = "chat world";
+override def use_render_system = false;
 
 struct program_state
 {
