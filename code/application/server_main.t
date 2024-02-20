@@ -5,6 +5,8 @@ import network;
 import meta;
 import string;
 
+override def enable_network_print = true;
+
 struct server_program
 {
     network platform_network;
@@ -59,54 +61,3 @@ while platform_handle_messages(platform ref)
 
 platform_network_shutdown(network);
 network_print("server shutdown\n");
-
-struct peer_buffer
-{
-    expand base       peer_info[256];
-           used_count u32;
-}
-
-struct peer_info
-{
-    expand address         platform_network_address;
-           timestamp       u64;
-           did_change      b8;
-           test_range_offset u16;
-}
-
-struct network_message
-{
-    active_peer_address platform_network_address;
-}
-
-func update_peer(peers peer_buffer ref, address platform_network_address)
-{
-    if not address.ip.u32_value
-        return;
-
-    var found = false;
-    loop var i u32; peers.used_count
-    {
-        var peer = peers[i] ref;
-        if peer.ip.u32_value is address.ip.u32_value
-        {
-            if address.port
-            {
-                peer.did_change = (peer.port is_not address.port);
-                peer.port = address.port;
-            }
-
-            found = true;
-            break;
-        }
-    }
-
-    if not found and (peers.used_count < peers.count)
-    {
-        var peer = peers[peers.used_count] ref;
-        peers.used_count += 1;
-
-        peer.address = address;
-        peer.did_change = (address.port is_not 0);
-    }
-}
