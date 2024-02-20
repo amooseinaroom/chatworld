@@ -1,3 +1,4 @@
+import font;
 
 struct menu_state
 {

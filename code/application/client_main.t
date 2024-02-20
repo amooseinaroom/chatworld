@@ -1,8 +1,9 @@
 
 import network;
 
-def game_title = "chat world";
-override def use_render_system = false;
+override def use_render_system = true;
+
+def game_title = "chatworld client";
 
 struct program_state
 {
@@ -31,11 +32,6 @@ enum color_edit_tag
     none;
     name_color;
     body_color;
-}
-
-func skip_space(iterator string ref)
-{
-    try_skip_set(iterator, " \t\n\r");
 }
 
 func game_init program_init_type
@@ -67,6 +63,8 @@ func game_init program_init_type
     client.name_color.alpha      = 1.0;
     evaluate(client.name_color ref);
 
+    client.server_address = load_server_address(platform, state.network ref, state.temporary_memory ref, client.server_address);
+
     {
         var result = try_platform_read_entire_file(platform, state.temporary_memory ref, client_save_state_path);
         if result.ok and (result.data.count is type_byte_count(game_client_save_state))
@@ -80,72 +78,6 @@ func game_init program_init_type
             client.user_password = save_state.user_password;
             client.user_password_edit.used_count = client.user_password.count;
             client.user_password_edit.edit_offset = client.user_password_edit.used_count;
-        }
-    }
-
-    if true
-    {
-        var tmemory = state.temporary_memory ref;
-        var source = platform_read_entire_file(platform, tmemory, "server.txt");
-
-        var dns string;
-        var server_ip = client.server_address.ip;
-        var port      = client.server_address.port;
-
-        var it = source;
-        skip_space(it ref);
-        while it.count
-        {
-            if not try_skip(it ref, "server")
-                assert(false);
-
-            skip_space(it ref);
-
-            if try_skip(it ref, "ip")
-            {
-                skip_space(it ref);
-
-                loop var i u32; 4
-                {
-                    var value u32;
-                    if not try_parse_u32(value ref, it ref) or (value > 255)
-                        assert(false);
-
-                    server_ip[i] = value cast(u8);
-
-                    if (i < 3) and not try_skip(it ref, ".")
-                        assert(false);
-                }
-
-                skip_space(it ref);
-            }
-            else if try_skip(it ref, "dns")
-            {
-                skip_space(it ref);
-                dns = try_skip_until_set(it ref, " \t\n\r");
-                assert(dns.count);
-            }
-            else
-                assert(false);
-
-            if not try_parse_u32(port ref, it ref) or (port > 65535)
-                assert(false);
-
-            skip_space(it ref);
-            break;
-        }
-
-        client.server_address.port = port cast(u16);
-
-        if dns.count
-        {
-            var result = platform_network_query_dns_ip(state.network ref, dns);
-            if result.ok
-                client.server_address.ip = result.ip;
-        }
-        else
-        {
-            client.server_address.ip = server_ip;
         }
     }
 }

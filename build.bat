@@ -23,7 +23,7 @@ set build=%project%build
 
 if not exist %build% mkdir %build%
 
-set includes=%project%code %lang_path%\modules %lang_path%\modules\win32 %lang_path%\modules\hot_reloading %lang_path%\modules\render
+set includes=%project%code %project%code\application\client_main.t %lang_path%\modules %lang_path%\modules\win32 %lang_path%\modules\hot_reloading %lang_path%\modules\render
 
 if %hot_code_reloading%==1 (
     set includes=%includes% %project%code\build\hot_reloading.t

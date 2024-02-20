@@ -7,6 +7,14 @@ def max_missed_heartbeats = 2;
 
 def max_player_count = 4;
 
+def enable_network_print = false;
+
+func network_print print_type
+{
+    if enable_network_print
+        print(format, values);
+}
+
 struct string255
 {
     count       u8;
@@ -44,8 +52,8 @@ enum network_message_tag
     login_accept;
     login_reject;
     heartbeat;
-    user_input;   
-    add_player; 
+    user_input;
+    add_player;
     remove_player;
     update_entity;
     delete_entity;
@@ -104,7 +112,7 @@ struct network_message_add_player
 
 struct network_message_remove_player
 {
-    expand base network_message_base;    
+    expand base network_message_base;
     entity_network_id u32;
 }
 
@@ -120,7 +128,7 @@ struct network_message_delete_entity
 {
     expand base network_message_base;
 
-    id     u32; 
+    id     u32;
 }
 
 struct network_message_chat
@@ -139,7 +147,7 @@ type network_message_union union
     login_accept  network_message_login_accept;
     login_reject  network_message_login_reject;
     heartbeat     network_message_heartbeat;
-    user_input    network_message_user_input;   
+    user_input    network_message_user_input;
     add_player    network_message_add_player;
     remove_player network_message_remove_player;
     update_entity network_message_update_entity;
@@ -161,7 +169,7 @@ func receive(network platform_network ref, receive_socket platform_network_socke
     var buffer_used_byte_count usize;
     var result = platform_network_receive(network, receive_socket, buffer, buffer_used_byte_count ref, platform_network_timeout_milliseconds_zero);
 
-    // we don't have connections that could fail, but win32 will indicate if a udp "connection" is lost running locally        
+    // we don't have connections that could fail, but win32 will indicate if a udp "connection" is lost running locally
     if not result.ok
         return false, message, {} platform_network_address;
 
@@ -175,3 +183,78 @@ func receive(network platform_network ref, receive_socket platform_network_socke
 }
 
 type game_user_sprite rgba8[256 * 128];
+
+
+func load_server_address(platform platform_api ref, network platform_network ref, tmemory memory_arena ref, default_address platform_network_address) (address platform_network_address)
+{
+    var address = default_address;
+
+    var source = platform_read_entire_file(platform, tmemory, "server.txt");
+
+    var dns string;
+    var server_ip = address.ip;
+    var port      = address.port;
+
+    var it = source;
+    skip_space(it ref);
+    while it.count
+    {
+        if not try_skip(it ref, "server")
+            assert(false);
+
+        skip_space(it ref);
+
+        if try_skip(it ref, "ip")
+        {
+            skip_space(it ref);
+
+            loop var i u32; 4
+            {
+                var value u32;
+                if not try_parse_u32(value ref, it ref) or (value > 255)
+                    assert(false);
+
+                server_ip[i] = value cast(u8);
+
+                if (i < 3) and not try_skip(it ref, ".")
+                    assert(false);
+            }
+
+            skip_space(it ref);
+        }
+        else if try_skip(it ref, "dns")
+        {
+            skip_space(it ref);
+            dns = try_skip_until_set(it ref, " \t\n\r");
+            assert(dns.count);
+        }
+        else
+            assert(false);
+
+        if not try_parse_u32(port ref, it ref) or (port > 65535)
+            assert(false);
+
+        skip_space(it ref);
+        break;
+    }
+
+    address.port = port cast(u16);
+
+    if dns.count
+    {
+        var result = platform_network_query_dns_ip(network, dns);
+        if result.ok
+            address.ip = result.ip;
+    }
+    else
+    {
+        address.ip = server_ip;
+    }
+
+    return address;
+}
+
+func skip_space(iterator string ref)
+{
+    try_skip_set(iterator, " \t\n\r");
+}

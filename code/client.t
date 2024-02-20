@@ -1,4 +1,7 @@
+import network;
 import win32;
+import math;
+import gl;
 
 struct game_client
 {

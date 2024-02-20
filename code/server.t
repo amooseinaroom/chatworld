@@ -19,7 +19,7 @@ struct game_client_connection
 
     name_color rgba8;
     body_color rgba8;
-    
+
     entity_id         game_entity_id;
     entity_network_id u32;
     user_index    u32;
@@ -38,7 +38,7 @@ struct game_client_connection
 struct game_user
 {
     name     string255;
-    password string255;    
+    password string255;
 }
 
 struct game_user_buffer
@@ -50,10 +50,10 @@ struct game_user_buffer
 def server_user_path = "server_users.bin";
 
 func init(server game_server ref, platform platform_api ref, network platform_network ref, server_port u16, tmemory memory_arena ref)
-{    
+{
     server.socket = platform_network_bind(network, server_port);
     require(platform_network_is_valid(server.socket));
-    print("Server Up and Running!\n");
+    network_print("Server Up and Running!\n");
 
     var result = try_platform_read_entire_file(platform, tmemory, server_user_path);
     if result.ok
@@ -72,7 +72,7 @@ func save(platform platform_api ref, server game_server ref)
 func new_network_id(server game_server ref) (id u32)
 {
     server.next_network_id += 1;
-    
+
     if not server.next_network_id
         server.next_network_id += 1;
 
@@ -118,7 +118,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 if server.users[i].name is message.name
                 {
                     if server.users[i].password is_not message.password
-                    {                        
+                    {
                         do_reject = true;
                         break;
                     }
@@ -126,14 +126,14 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     user_index = i;
                     break;
                 }
-            }            
+            }
 
             if not do_reject and (found_index is u32_invalid_index)
             {
                 if server.client_count >= server.clients.count
                 {
-                    print("Server: rejected player, game is full! %\n", result.address);
-                    do_reject = true;                    
+                    network_print("Server: rejected player, game is full! %\n", result.address);
+                    do_reject = true;
                 }
                 else
                 {
@@ -149,12 +149,12 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                     if is_loggind_in
                     {
-                        print("Server: rejected player, user is already logged in! %\n", result.address);
-                        do_reject = true;                        
+                        network_print("Server: rejected player, user is already logged in! %\n", result.address);
+                        do_reject = true;
                     }
                     else
                     {
-                        print("Server: added Client %\n", result.address);
+                        network_print("Server: added Client %\n", result.address);
                         found_index = server.client_count;
                         client = server.clients[found_index] ref;
                         client deref = {} game_client_connection;
@@ -170,13 +170,13 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     }
                 }
             }
-                        
+
             if not do_reject and (user_index is u32_invalid_index)
             {
                 if server.user_count >= server.users.count
                 {
-                    print("Server: rejected user, server users are full! %\n", result.address);
-                    do_reject = true;                    
+                    network_print("Server: rejected user, server users are full! %\n", result.address);
+                    do_reject = true;
                 }
                 else
                 {
@@ -188,21 +188,21 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     save(platform, server);
                 }
             }
-            
+
             if do_reject
             {
                 var message network_message_union;
-                message.tag = network_message_tag.login_reject;                        
-                send(network, message, server.socket, result.address);                                     
+                message.tag = network_message_tag.login_reject;
+                send(network, message, server.socket, result.address);
             }
             else
             {
                 client.user_index = user_index;
-                
+
                 var message network_message_union;
                 message.tag = network_message_tag.login_accept;
                 message.login_accept.id = client.entity_network_id;
-                send(network, message, server.socket, client.address);                        
+                send(network, message, server.socket, client.address);
             }
         }
         case network_message_tag.user_input
@@ -219,7 +219,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     var movement = normalize_or_zero(result.message.user_input.movement);
                     if squared_length(movement) is 0
                         movement = [ 0, 1 ] vec2;
-                            
+
                     add_fireball(game, new_network_id(server), entity.position + [ 0, entity.collider.radius ] vec2, movement * 2);
                 }
             }
@@ -227,7 +227,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             client.do_update = true;
         }
         case network_message_tag.heartbeat
-        {            
+        {
         }
         case network_message_tag.chat
         {
@@ -240,8 +240,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             client.heartbeat_timeout = 1;
             client.missed_heartbeat_count = 0;
         }
-        
-        print("Server: GOTTEM! % %\n", result.message.tag, result.address);
+
+        network_print("Server: GOTTEM! % %\n", result.message.tag, result.address);
     }
 
     // disconnect users that missed too many heartbeats
@@ -252,7 +252,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         if client.heartbeat_timeout <= 0
         {
             client.heartbeat_timeout += 1;
-            client.missed_heartbeat_count += 1;            
+            client.missed_heartbeat_count += 1;
         }
     }
 
@@ -262,18 +262,18 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         var client = server.clients[a] ref;
 
         if client.missed_heartbeat_count > max_missed_heartbeats
-        {   
+        {
             loop var b u32; server.client_count
             {
                 var other = server.clients[b] ref;
 
                 var message network_message_union;
                 message.tag = network_message_tag.remove_player;
-                message.remove_player.entity_network_id = client.entity_network_id;                
+                message.remove_player.entity_network_id = client.entity_network_id;
                 send(network, message, server.socket, other.address);
             }
 
-            print("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
+            network_print("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
             remove(game, client.entity_id);
             server.client_count -= 1;
             server.clients[a] = server.clients[server.client_count];
@@ -307,11 +307,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.add_player.name_color = client.name_color;
                 message.add_player.body_color = client.body_color;
                 send(network, message, server.socket, other.address);
-                
+
                 // tell client about other
                 message.tag = network_message_tag.add_player;
                 message.add_player.entity_network_id = other.entity_network_id;
-                message.add_player.name = other_name; 
+                message.add_player.name = other_name;
                 message.add_player.name_color = other.name_color;
                 message.add_player.body_color = other.body_color;
                 send(network, message, server.socket, client.address);
@@ -324,8 +324,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.chat.id = client.entity_network_id;
                 message.chat.text = client.chat_message;
                 send(network, message, server.socket, other.address);
-            }            
-        }        
+            }
+        }
 
         loop var i u32; game.entity.count
         {
@@ -341,7 +341,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             }
             else if game.do_update[i]
             {
-                var entity = game.entity[i]; 
+                var entity = game.entity[i];
                 var message network_message_union;
                 message.tag = network_message_tag.update_entity;
                 message.update_entity.id     = game.network_id[i];
