@@ -119,8 +119,9 @@ func game_init program_init_type
 
                 skip_space(it ref);
             }
-            else if  try_skip(it ref, "dns")
+            else if try_skip(it ref, "dns")
             {
+                skip_space(it ref);
                 dns = try_skip_until_set(it ref, " \t\n\r");
                 assert(dns.count);
             }
@@ -138,16 +139,9 @@ func game_init program_init_type
 
         if dns.count
         {
-            var records DNS_RECORD ref;
-            var name_buffer u8[512];
-            var status = DnsQuery_A(as_cstring(name_buffer, dns), DNS_TYPE_A, DNS_QUERY_STANDARD, null, records cast(u8 ref) ref, null);
-            var iterator = records;
-            if iterator
-            {
-                client.server_address.ip = iterator.Data.A.IpAddress ref cast(platform_network_ip ref) deref;
-            }
-
-            DnsRecordListFree(records, 0);
+            var result = platform_network_query_dns_ip(state.network ref, dns);
+            if result.ok
+                client.server_address.ip = result.ip;
         }
         else
         {
