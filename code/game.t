@@ -187,7 +187,7 @@ func update_game_version(platform platform_api ref, tmemory memory_arena ref)
         var version_git_commit_id string = try_platform_read_entire_file(platform, tmemory, version_git_commit_id_path).data;
         var current_git_commit_id string = try_platform_read_entire_file(platform, tmemory, current_git_commit_id_path).data;
 
-        if version_git_commit_id is_not current_git_commit_id
+        if current_git_commit_id.count and (version_git_commit_id is_not current_git_commit_id)
         {
             var buffer u8[1024];
             var builder = string_builder_from_buffer(buffer);
