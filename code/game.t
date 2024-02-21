@@ -48,9 +48,9 @@ enum game_entity_tag
     fireball;
 }
 
-func init(game game_state ref, platform platform_api ref, tmemory memory_arena ref)
+func init(game game_state ref)
 {
-    update_game_version(platform, tmemory);
+    clear_value(game);
 
     loop var i u32; game.freelist.count
         game.freelist[i] = i;

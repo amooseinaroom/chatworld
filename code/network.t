@@ -58,6 +58,8 @@ enum network_message_tag
     update_entity;
     delete_entity;
     chat;
+
+    admin_server_shutdown;
 }
 
 struct network_message_base
@@ -83,6 +85,8 @@ struct network_message_login_accept
     expand base network_message_base;
 
     id u32;
+
+    is_admin b8;
 }
 
 enum network_message_reject_reason
@@ -94,6 +98,7 @@ enum network_message_reject_reason
     server_full_active_player;
     server_full_total_user;
     server_disconnect;
+    server_kick; // essentially the same as disconnect
 }
 
 struct network_message_login_reject
@@ -160,7 +165,7 @@ type network_message_union union
 
     login         network_message_login;
     login_accept  network_message_login_accept;
-    login_reject  network_message_login_reject;
+    login_reject  network_message_login_reject;    
     heartbeat     network_message_heartbeat;
     user_input    network_message_user_input;
     add_player    network_message_add_player;
@@ -272,4 +277,11 @@ func load_server_address(platform platform_api ref, network platform_network ref
 func skip_space(iterator string ref)
 {
     try_skip_set(iterator, " \t\n\r");
+}
+
+func skip_name(iterator string ref) (name string)
+{
+    var name_blacklist = " \t\n\r\\\"\'+-*/.,:;~{}[]()<>|&!?=^°%";
+    var name = try_skip_until_set(iterator, name_blacklist, false);
+    return name;
 }

@@ -3,13 +3,27 @@ import win32;
 import math;
 import gl;
 
-struct game_client
+struct game_client_persistant_state
 {
-    game game_state;
-
     socket platform_network_socket;
 
     server_address platform_network_address;
+
+    user_name_edit editable_text;
+    user_name      string255;
+
+    name_color color_hsva;
+    body_color color_hsva;
+
+    user_password_edit editable_text;
+    user_password      string255;
+};
+
+struct game_client
+{
+    expand persistant_state game_client_persistant_state;
+
+    game game_state;  
 
     state client_state;
     reconnect_timeout f32;
@@ -21,14 +35,8 @@ struct game_client
     players      game_player[max_player_count];
     player_count u32;
 
-    user_name_edit editable_text;
-    user_name      string255;
-
-    name_color color_hsva;
-    body_color color_hsva;
-
-    user_password_edit editable_text;
-    user_password      string255;
+    is_admin b8;
+    do_shutdown_server b8;
 
     chat_message_edit editable_text;
     chat_message      string255;
@@ -199,18 +207,21 @@ enum client_state
 
 func init(client game_client ref, network platform_network ref, server_address platform_network_address)
 {
+    var persistant_state = client.persistant_state;
+    clear_value(client);
+    client.persistant_state = persistant_state;
+
     if not platform_network_is_valid(client.socket)
     {
         client.socket = platform_network_bind(network);
         require(platform_network_is_valid(client.socket));
     }
 
+    init(client.game ref);
+
     print("Client Up and Running!\n");
-    client.state = client_state.connecting;
-    client.reconnect_timeout = 0;
-    client.reconnect_count = 0;
+    client.state = client_state.connecting;    
     client.server_address = server_address;
-    client.reject_reason = 0;
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
@@ -243,6 +254,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 // add_player message
                 var entity_id = add_player(game, client.network_id);
                 client.player_count = 0;
+                client.is_admin = result.message.login_accept.is_admin;
                 var player = find_player(client, entity_id);
                 assert(player);
                 player.name = client.user_name;
@@ -375,6 +387,15 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
     }
     case client_state.online
     {
+        if client.do_shutdown_server
+        {
+            client.do_shutdown_server = false;
+
+            var message network_message_union;
+            message.tag = network_message_tag.admin_server_shutdown;
+            send(network, message, client.socket, client.server_address);
+        }
+
         if client.frame_input.do_attack or (squared_length(client.frame_input.movement) > 0)
         {
             var message network_message_union;

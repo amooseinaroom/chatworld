@@ -45,8 +45,7 @@ func game_init program_init_type
     client.server_address.ip[0] = 127;
     client.server_address.ip[3] = 1;
 
-    init(client.game ref, platform, state.temporary_memory ref);
-    init(state.server.game ref, platform, state.temporary_memory ref);
+    update_game_version(platform, state.temporary_memory ref);
 
     // client.server_address.ip.u8_values = [ 77, 64, 253, 6 ] u8[];
     // client.server_address.port = 50881;
@@ -317,6 +316,9 @@ func game_update program_update_type
         {
             var game = client.game ref;
 
+            if client.is_admin
+                print(ui, 10, font, cursor ref, "Admin User");
+
             // update(platform, state);
 
             var player = client.players[0] ref;
@@ -343,6 +345,9 @@ func game_update program_update_type
             }
             else
             {
+                if platform_key_is_active(platform, platform_key.alt) and platform_key_was_pressed(platform, platform_key.f0 + 3)
+                    client.do_shutdown_server = true;
+
                 if platform_key_was_pressed(platform, platform_key.enter)
                 {
                     game.is_chatting = true;

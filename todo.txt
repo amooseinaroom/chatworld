@@ -40,6 +40,14 @@ day 7: (offline)
 
 * sprite selection and turn around
 * use sprites locally
+* dedicated server without rendering
+* game versioning depending on git commit id
+* better player visualization
+
+day 8:
+* add admin to users, so we can send remote commands to the server
+* add server shutdown command
+* some login stability
 
 next
 
