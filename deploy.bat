@@ -10,4 +10,3 @@ xcopy /Y customization\character_template.png %destination%customization\charact
 xcopy /Y chatworld.exe        %destination%chatworld.exe
 xcopy /Y server_chatworld.exe %destination%server_chatworld.exe
 xcopy /Y git_commit_id_version.txt %destination%git_commit_id_version.txt
-xcopy /Y git_commit_id_current.txt %destination%git_commit_id_current.txt
