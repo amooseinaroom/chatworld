@@ -415,7 +415,7 @@ func game_update program_update_type
                 sprite_texture_box.min = [ 0, 0 ] vec2;
                 sprite_texture_box.max = [ 128, 128 ] vec2;
 
-                var box = draw_player(ui, position, tile_size, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+                var box = draw_player(ui, position, tile_size, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
                 draw_player_name(ui, font, position, tile_size, from_string255(player.name), player.name_color);
 
                 if player.chat_message_timeout > 0
