@@ -111,29 +111,36 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         {
             var message = result.message.login;
 
+            var reject_reason = network_message_reject_reason.none;
+
+            if message.client_version is_not game_version
+                reject_reason = network_message_reject_reason.version_missmatch;
+
             var user_index = u32_invalid_index;
-            var do_reject = false;
-            loop var i u32; server.user_count
+            if reject_reason is 0
             {
-                if server.users[i].name is message.name
+                loop var i u32; server.user_count
                 {
-                    if server.users[i].password is_not message.password
+                    if server.users[i].name is message.name
                     {
-                        do_reject = true;
+                        if server.users[i].password is_not message.password
+                        {
+                            reject_reason = network_message_reject_reason.credential_missmatch;
+                            break;
+                        }
+
+                        user_index = i;
                         break;
                     }
-
-                    user_index = i;
-                    break;
                 }
             }
 
-            if not do_reject and (found_index is u32_invalid_index)
+            if (reject_reason is 0) and (found_index is u32_invalid_index)
             {
                 if server.client_count >= server.clients.count
                 {
                     network_print("Server: rejected player, game is full! %\n", result.address);
-                    do_reject = true;
+                    reject_reason = network_message_reject_reason.server_full_active_player;
                 }
                 else
                 {
@@ -150,7 +157,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     if is_loggind_in
                     {
                         network_print("Server: rejected player, user is already logged in! %\n", result.address);
-                        do_reject = true;
+                        reject_reason = network_message_reject_reason.duplicated_user_login;
                     }
                     else
                     {
@@ -171,12 +178,12 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 }
             }
 
-            if not do_reject and (user_index is u32_invalid_index)
+            if (reject_reason is 0) and (user_index is u32_invalid_index)
             {
                 if server.user_count >= server.users.count
                 {
                     network_print("Server: rejected user, server users are full! %\n", result.address);
-                    do_reject = true;
+                    reject_reason = network_message_reject_reason.server_full_total_user;
                 }
                 else
                 {
@@ -189,10 +196,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 }
             }
 
-            if do_reject
+            if reject_reason is_not 0
             {
                 var message network_message_union;
                 message.tag = network_message_tag.login_reject;
+                message.login_reject.reason = reject_reason;
                 send(network, message, server.socket, result.address);
             }
             else

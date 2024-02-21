@@ -6,7 +6,7 @@ struct game_state
 
     is_chatting b8;
 
-    // entity manager    
+    // entity manager
 
     generation   u32[max_entity_count];
     active       b8[max_entity_count];
@@ -16,14 +16,14 @@ struct game_state
     entity       game_entity[max_entity_count];
 
     freelist     u32[max_entity_count];
-    entity_count u32;    
+    entity_count u32;
 }
 
 // COMPILER BUG: somehow sets the type to u8
 def max_entity_count = (1 bit_shift_left 14) cast(u32);
 
 type game_entity_id union
-{    
+{
     expand pair struct
     {
         index_plus_one u32;
@@ -48,10 +48,12 @@ enum game_entity_tag
     fireball;
 }
 
-func init(game game_state ref)
+func init(game game_state ref, platform platform_api ref, tmemory memory_arena ref)
 {
-    loop var i u32; game.freelist.count    
-        game.freelist[i] = i;    
+    update_game_version(platform, tmemory);
+
+    loop var i u32; game.freelist.count
+        game.freelist[i] = i;
 }
 
 func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_entity_id)
@@ -66,12 +68,12 @@ func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_enti
     game.entity[index] = {} game_entity;
     game.entity[index].tag = tag;
     game.network_id[index] = network_id;
-    
+
     assert(not game.active[index]);
     game.active[index] = true;
     game.do_delete[index] = false;
-    
-    var id game_entity_id;    
+
+    var id game_entity_id;
     id.index_plus_one = index + 1;
     id.generation = game.generation[index];
     return id;
@@ -82,7 +84,7 @@ func add_player(game game_state ref, network_id u32) (id game_entity_id)
     var id = add(game, game_entity_tag.player, network_id);
     var entity = get(game, id);
     entity.collider = { [ 0, 0.5 ] vec2, 0.5 } sphere2;
-    
+
     return id;
 }
 
@@ -97,9 +99,9 @@ func add_fireball(game game_state ref, network_id u32, position vec2, movement v
 }
 
 func remove(game game_state ref, id game_entity_id)
-{    
+{
     assert(id.index_plus_one and (id.index_plus_one <= game.entity.count));
-    
+
     var index = id.index_plus_one - 1;
     assert(not game.do_delete[index]);
     game.do_delete[index] = true;
@@ -108,9 +110,9 @@ func remove(game game_state ref, id game_entity_id)
 func remove_for_real(game game_state ref, id game_entity_id)
 {
     assert(id.index_plus_one and (id.index_plus_one <= game.entity.count));
-    
-    var index = id.index_plus_one - 1;    
-    
+
+    var index = id.index_plus_one - 1;
+
     assert(game.active[index]);
     game.active[index] = false;
 
@@ -123,7 +125,7 @@ func get(game game_state ref, id game_entity_id) (entity game_entity ref)
 {
     if not id.index_plus_one
         return null;
-    
+
     var index = id.index_plus_one - 1;
     assert(index < game.entity.count);
 
@@ -147,7 +149,7 @@ func update(game game_state ref, delta_seconds f32)
             remove_for_real(game, { i + 1, game.generation[i] } game_entity_id);
             continue;
         }
-        
+
         var entity = game.entity[i] ref;
 
         var position = entity.position;
@@ -155,20 +157,48 @@ func update(game game_state ref, delta_seconds f32)
         switch entity.tag
         case game_entity_tag.fireball
         {
-            entity.position += entity.movement * delta_seconds; 
+            entity.position += entity.movement * delta_seconds;
             entity.lifetime -= delta_seconds;
             if entity.lifetime <= 0
-            {                
+            {
                 remove(game, { i + 1, game.generation[i] } game_entity_id);
                 continue;
             }
         }
         else
         {
-            entity.position += entity.movement;        
+            entity.position += entity.movement;
             entity.movement = {} vec2;
         }
 
-        game.do_update[i] = squared_length(position - entity.position) > 0;        
+        game.do_update[i] = squared_length(position - entity.position) > 0;
+    }
+}
+
+func update_game_version(platform platform_api ref, tmemory memory_arena ref)
+{
+    if lang_debug
+    {
+        var temp_frame = temporary_begin(tmemory);
+
+        def version_git_commit_id_path = "git_commit_id_version.txt";
+        def current_git_commit_id_path = "git_commit_id_current.txt";
+
+        var version_git_commit_id string = try_platform_read_entire_file(platform, tmemory, version_git_commit_id_path).data;
+        var current_git_commit_id string = try_platform_read_entire_file(platform, tmemory, current_git_commit_id_path).data;
+
+        if version_git_commit_id is_not current_git_commit_id
+        {
+            var buffer u8[1024];
+            var builder = string_builder_from_buffer(buffer);
+            write(builder ref, "// game_version is variable, since we auto detect the version change on program start\n");
+            game_version += 1;
+            write(builder ref, "var global game_version = % cast(u32); // git commit id %", game_version, current_git_commit_id);
+
+            platform_write_entire_file(platform, "code/version.t", builder.text);
+            platform_copy_file(platform, version_git_commit_id_path, current_git_commit_id_path);
+        }
+
+        temporary_end(tmemory, temp_frame);
     }
 }

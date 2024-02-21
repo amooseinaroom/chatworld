@@ -74,6 +74,8 @@ struct network_message_login
 
     name_color rgba8;
     body_color rgba8;
+
+    client_version u32;
 }
 
 struct network_message_login_accept
@@ -83,9 +85,22 @@ struct network_message_login_accept
     id u32;
 }
 
+enum network_message_reject_reason
+{
+    none;
+    version_missmatch;
+    credential_missmatch;
+    duplicated_user_login;
+    server_full_active_player;
+    server_full_total_user;
+    server_disconnect;
+}
+
 struct network_message_login_reject
 {
     expand base network_message_base;
+
+    reason network_message_reject_reason;
 }
 
 type network_message_heartbeat network_message_base;

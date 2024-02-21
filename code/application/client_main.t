@@ -45,8 +45,8 @@ func game_init program_init_type
     client.server_address.ip[0] = 127;
     client.server_address.ip[3] = 1;
 
-    init(client.game ref);
-    init(state.server.game ref);
+    init(client.game ref, platform, state.temporary_memory ref);
+    init(state.server.game ref, platform, state.temporary_memory ref);
 
     // client.server_address.ip.u8_values = [ 77, 64, 253, 6 ] u8[];
     // client.server_address.port = 50881;
@@ -110,7 +110,9 @@ func game_update program_update_type
 
     var global font_index u32 = 3; // stanberry
     var font_changed = false;
-    if false // disable font cycling
+
+    def enable_font_cycling = false;
+    if enable_font_cycling
     {
         if platform_key_was_pressed(platform, "T"[0])
         {
@@ -137,10 +139,18 @@ func game_update program_update_type
     var font = state.font;
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
-    print(ui, 10, font, cursor ref,  "fps: %\nfont: %\n", 1.0 / platform.delta_seconds, font_paths[font_index]);
+    print(ui, 10, font, cursor ref, "fps: %\n", 1.0 / platform.delta_seconds);
+
+    if enable_font_cycling
+        print(ui, 10, font, cursor ref, "font: % [%]\n", font_paths[font_index], font_index);
 
     if client.state is client_state.disconnected
     {
+        if client.reject_reason is_not 0
+            print(ui, 10, font, cursor ref, "Server rejected connection: %\n", client.reject_reason);
+        else if client.reconnect_count
+            print(ui, 10, font, cursor ref, "Server is not responding, it may be offline\n");
+
         draw_box(ui, -1000, [ 20, 20, 255, 255 ] rgba8, ui.scissor_box);
 
         var box = draw_box_begin(ui);
@@ -296,6 +306,12 @@ func game_update program_update_type
         }
 
         tick(client, state.network ref, platform.delta_seconds);
+
+        if client.state is client_state.connecting
+        {
+            var text_color = [ 255, 255, 255, (sin(client.reconnect_timeout * 2 * pi32) * 0.5 + 0.5 * 255) cast(u8) ] rgba8;
+            print(ui, 10, text_color, font, cursor ref, "Connecting to Server %.%.%.%:%", client.server_address.ip[0], client.server_address.ip[1], client.server_address.ip[2], client.server_address.ip[3], client.server_address.port);
+        }
 
         if (client.state is client_state.online)
         {

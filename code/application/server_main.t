@@ -33,7 +33,7 @@ def seconds_per_tick = 1.0 / ticks_per_second;
 var server = program.server ref;
 var game = server.game ref;
 
-init(game);
+init(game, platform ref, memory ref);
 
 var server_address platform_network_address;
 server_address.port = default_server_port;

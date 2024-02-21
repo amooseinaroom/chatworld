@@ -13,6 +13,8 @@ struct game_client
 
     state client_state;
     reconnect_timeout f32;
+    reconnect_count   u32;
+    reject_reason network_message_reject_reason;
 
     frame_input network_message_user_input;
 
@@ -191,7 +193,7 @@ struct game_player
 enum client_state
 {
     disconnected;
-    connected;
+    connecting;
     online;
 }
 
@@ -204,8 +206,11 @@ func init(client game_client ref, network platform_network ref, server_address p
     }
 
     print("Client Up and Running!\n");
-    client.state = client_state.connected;
+    client.state = client_state.connecting;
+    client.reconnect_timeout = 0;
+    client.reconnect_count = 0;
     client.server_address = server_address;
+    client.reject_reason = 0;
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
@@ -229,7 +234,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         switch result.message.tag
         case network_message_tag.login_accept
         {
-            if client.state is client_state.connected
+            if client.state is client_state.connecting
             {
                 client.network_id = result.message.login_accept.id;
                 client.state = client_state.online;
@@ -249,6 +254,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         case network_message_tag.login_reject
         {
             client.state = client_state.disconnected;
+            client.reject_reason = result.message.login_reject.reason;
         }
         case network_message_tag.add_player
         {
@@ -340,7 +346,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
     {
 
     }
-    case client_state.connected
+    case client_state.connecting
     {
         client.reconnect_timeout -= delta_seconds;
 
@@ -348,8 +354,16 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         {
             client.reconnect_timeout += 1.0;
 
+            client.reconnect_count += 1;
+            if client.reconnect_count > 10
+            {
+                client.state = client_state.disconnected;
+                break;
+            }
+
             var message network_message_union;
             message.tag = network_message_tag.login;
+            message.login.client_version = game_version;
             message.login.name     = client.user_name;
             message.login.password = client.user_password;
             message.login.name_color = to_rgba8(client.name_color.color);
