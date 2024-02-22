@@ -138,7 +138,7 @@ func game_update program_update_type
     var font = state.font;
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
-    print(ui, 10, font, cursor ref, "fps: %\n", 1.0 / platform.delta_seconds);
+    print(ui, 10, font, cursor ref, "version: %, fps: %\n", game_version, 1.0 / platform.delta_seconds);
 
     if enable_font_cycling
         print(ui, 10, font, cursor ref, "font: % [%]\n", font_paths[font_index], font_index);
@@ -156,14 +156,14 @@ func game_update program_update_type
         var cursor = cursor_below_position(font.info, ui.viewport_size.width * 0.5, ui.viewport_size.height * 0.75);
 
         print(ui, menu_layer.text, font, cursor ref, "user: ");
-        edit255_begin(client.user_name_edit ref, client.user_name ref);
+        edit_string_begin(client.user_name_edit ref, client.user_name ref);
         menu_text_edit(menu, location_id(0), font, cursor ref, client.user_name_edit ref);
-        edit255_end(client.user_name_edit, client.user_name ref);
+        edit_string_end(client.user_name_edit, client.user_name ref);
 
         print(ui, menu_layer.text, font, cursor ref, "password: ");
-        edit255_begin(client.user_password_edit ref, client.user_password ref);
+        edit_string_begin(client.user_password_edit ref, client.user_password ref);
         menu_text_edit(menu, location_id(0), font, cursor ref, client.user_password_edit ref);
-        edit255_end(client.user_password_edit, client.user_password ref);
+        edit_string_end(client.user_password_edit, client.user_password ref);
 
         if menu_button(menu, location_id(0), font, cursor ref, "Host")
         {
@@ -273,7 +273,7 @@ func game_update program_update_type
             sprite_texture_box.max = [ 128, 128 ] vec2;
 
             var box = draw_player(ui, position, tile_size, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
-            draw_player_name(ui, font, position, tile_size, from_string255(client.user_name), to_rgba8(client.name_color.color));
+            draw_player_name(ui, font, position, tile_size, to_string(client.user_name), to_rgba8(client.name_color.color));
 
             cursor.position.y = box.min.y cast(s32);
             advance_line(font.info, cursor ref);
@@ -299,10 +299,7 @@ func game_update program_update_type
     else
     {
         if state.is_host
-        {
             tick(platform, state.server ref, state.network ref, platform.delta_seconds);
-            update(state.server.game ref, platform.delta_seconds);
-        }
 
         tick(client, state.network ref, platform.delta_seconds);
 
@@ -323,18 +320,16 @@ func game_update program_update_type
 
             var player = client.players[0] ref;
 
-            client.frame_input = {} network_message_user_input;
-
             if game.is_chatting
             {
                 client.chat_message_edit.buffer.count = client.chat_message.base.count;
                 client.chat_message_edit.buffer.base  = client.chat_message.base.base;
 
-                edit255_begin(client.chat_message_edit ref, client.chat_message ref);
+                edit_string_begin(client.chat_message_edit ref, client.chat_message ref);
 
                 edit_text(client.chat_message_edit ref, menu.characters ref);
 
-                edit255_end(client.chat_message_edit, client.chat_message ref);
+                edit_string_end(client.chat_message_edit, client.chat_message ref);
 
                 if not platform_key_is_active(platform, platform_key.control) and not platform_key_is_active(platform, platform_key.alt) and not platform_key_is_active(platform, platform_key.shift) and platform_key_was_pressed(platform, platform_key.enter)
                 {
@@ -369,9 +364,8 @@ func game_update program_update_type
                 var movement_speed = 6;
                 // player.position += movement * (movement_speed * platform.delta_seconds);
 
-                client.frame_input.movement = movement * movement_speed;
-                client.frame_input.delta_seconds = platform.delta_seconds;
-                client.frame_input.do_attack = do_attack;
+                client.frame_input.movement += movement * (movement_speed * platform.delta_seconds);
+                client.frame_input.do_attack or= do_attack;
 
                 var tile_frame = 4;
                 if entity.position.x > (game.camera_position.x + (tiles_per_width * 0.5) - tile_frame)
@@ -421,7 +415,7 @@ func game_update program_update_type
                 sprite_texture_box.max = [ 128, 128 ] vec2;
 
                 var box = draw_player(ui, position, tile_size, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
-                draw_player_name(ui, font, position, tile_size, from_string255(player.name), player.name_color);
+                draw_player_name(ui, font, position, tile_size, to_string(player.name), player.name_color);
 
                 if player.chat_message_timeout > 0
                 {
@@ -432,7 +426,7 @@ func game_update program_update_type
 
                     var cursor = cursor_below_position(font.info, 0, 0);
                     var text_color = [ 10, 10, 10, alpha ] rgba8;
-                    print(ui, 11, text_color, font, cursor ref, from_string255(player.chat_message));
+                    print(ui, 11, text_color, font, cursor ref, to_string(player.chat_message));
 
                     var box = draw_aligned_end(ui, aligned_state);
                     var chat_color = [ 245, 245, 245, alpha ] rgba8;
@@ -446,7 +440,7 @@ func game_update program_update_type
                     // var t = pow(player.chat_message_timeout, 0.25);
                     var alpha = 255 cast(u8);
 
-                    var text = from_string255(client.chat_message);
+                    var text = to_string(client.chat_message);
 
                     var cursor = cursor_below_position(font.info, 0, 0);
                     var text_color = [ 10, 10, 10, alpha ] rgba8;
@@ -532,16 +526,6 @@ func game_update program_update_type
     return true;
 }
 
-func edit255_begin(text_edit editable_text ref, text string255 ref)
-{
-    text_edit.buffer.count = text.base.count;
-    text_edit.buffer.base = text.base.base;
-}
-
-func edit255_end(text_edit editable_text, text string255 ref)
-{
-    text.count = text_edit.used_count cast(u8);
-}
 
 enum render_texture_slot render_texture_slot_base
 {

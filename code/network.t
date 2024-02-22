@@ -1,49 +1,35 @@
 
 def default_server_port = 50881 cast(u16); // 18124 cast(u16); //51337 cast(u16);
 
+def server_ticks_per_second = 30;
+def server_seconds_per_tick = 1.0 / server_ticks_per_second;
+
 def heartbeat_period = 5.0;
 def heartbeats_per_seconds = 1.0 / heartbeat_period;
 def max_missed_heartbeats = 2;
 
 def max_player_count = 4;
 
-def enable_network_print = false;
+def enable_network_print    = true;
+def network_print_max_level = network_print_level.crucial;
 
+enum network_print_level
+{
+    crucial;
+    info;
+}
+
+// essentially network_print_crucial
 func network_print print_type
 {
     if enable_network_print
         print(format, values);
 }
 
-struct string255
+func network_print_info print_type
 {
-    count       u8;
-    expand base u8[255];
-}
-
-func to_string255(text string) (result string255)
-{
-    var result string255;
-    assert(text.count <= result.base.count);
-    copy_array({ text.count, result.base.base } u8[], text);
-    result.count = text.count cast(u8);
-
-    return result;
-}
-
-func from_string255(text string255) (result string)
-{
-    return { text.count, text.base.base } string;
-}
-
-func is(left string255, right string255) (ok b8)
-{
-    return from_string255(left) is from_string255(right);
-}
-
-func is_not(left string255, right string255) (ok b8)
-{
-    return from_string255(left) is_not from_string255(right);
+    if enable_network_print and (network_print_level.info <= network_print_max_level)
+        print(format, values);
 }
 
 enum network_message_tag
@@ -71,8 +57,8 @@ struct network_message_login
 {
     expand base network_message_base;
 
-    name      string255;
-    password  string255;
+    name      string63;
+    password  string63;
 
     name_color rgba8;
     body_color rgba8;
@@ -114,16 +100,15 @@ struct network_message_user_input
 {
     expand base network_message_base;
 
-    movement      vec2;
-    delta_seconds f32;
-    do_attack     b8;
+    movement  vec2;
+    do_attack b8;
 }
 
 struct network_message_add_player
 {
     expand base network_message_base;
 
-    name              string255;
+    name              string63;
     name_color        rgba8;
     body_color        rgba8;
 
@@ -165,7 +150,7 @@ type network_message_union union
 
     login         network_message_login;
     login_accept  network_message_login_accept;
-    login_reject  network_message_login_reject;    
+    login_reject  network_message_login_reject;
     heartbeat     network_message_heartbeat;
     user_input    network_message_user_input;
     add_player    network_message_add_player;

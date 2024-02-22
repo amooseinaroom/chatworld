@@ -6,6 +6,11 @@ import meta;
 import string;
 
 override def enable_network_print = true;
+override def network_print_max_level = network_print_level.info;
+
+// for some shared files that use this value
+// server_main does not include hot_reloading files
+def enable_hot_reloading = false;
 
 struct server_program
 {
@@ -26,9 +31,6 @@ allocate(memory ref, program ref);
 
 var network = program.network ref;
 platform_network_init(network);
-
-def ticks_per_second = 30;
-def seconds_per_tick = 1.0 / ticks_per_second;
 
 var server = program.server ref;
 var game = server.game ref;
@@ -53,11 +55,11 @@ init(server, platform ref, network, server_address.port, memory ref);
         require(ok);
         skip_space(it ref);
 
-        var name = to_string255(skip_name(it ref));
+        var name = to_string63(skip_name(it ref));
         require(name.count);
         skip_space(it ref);
 
-        var password = to_string255(try_skip_until_set(it ref, " \n\t\r", true));
+        var password = to_string63(try_skip_until_set(it ref, " \n\t\r", true));
         require(password.count);
         skip_space(it ref);
 
@@ -78,7 +80,7 @@ init(server, platform ref, network, server_address.port, memory ref);
             var user = add_user(server, name, password).user;
             require(user);
             user.is_admin = true;
-        }    
+        }
     }
 
     save(platform ref, server);
@@ -90,14 +92,11 @@ platform_update_time(platform ref);
 while platform_handle_messages(platform ref)
 {
     tick(platform ref, server, network, platform.delta_seconds);
-    update(game, platform.delta_seconds);
 
     if server.do_shutdown
         break;
 
-    var sleep_seconds = maximum(0, seconds_per_tick - platform.delta_seconds);
-
-    // sleep 5 minutes
+    var sleep_seconds = maximum(0, server_seconds_per_tick - platform.delta_seconds);
     var sleep_milliseconds = (sleep_seconds * 1000) cast(u32);
     if sleep_milliseconds > 0
         platform_sleep_milliseconds(platform ref, sleep_milliseconds);
@@ -109,8 +108,8 @@ loop var i u32; server.client_count
     var message network_message_union;
     message.tag = network_message_tag.login_reject;
     message.login_reject.reason = network_message_reject_reason.server_disconnect;
-    send(network, message, server.socket, server.clients[i].address);    
-} 
+    send(network, message, server.socket, server.clients[i].address);
+}
 
 platform_network_shutdown(network);
-network_print("server shutdown\n");
+network_print("Server: shutdown.\n");

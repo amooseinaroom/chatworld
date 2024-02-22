@@ -10,25 +10,27 @@ struct game_client_persistant_state
     server_address platform_network_address;
 
     user_name_edit editable_text;
-    user_name      string255;
+    user_name      string63;
 
     name_color color_hsva;
     body_color color_hsva;
 
     user_password_edit editable_text;
-    user_password      string255;
+    user_password      string63;
 };
 
 struct game_client
 {
     expand persistant_state game_client_persistant_state;
 
-    game game_state;  
+    game game_state;
 
     state client_state;
     reconnect_timeout f32;
     reconnect_count   u32;
     reject_reason network_message_reject_reason;
+
+    tick_send_timeout f32;
 
     frame_input network_message_user_input;
 
@@ -166,11 +168,11 @@ func get_sprite(atlas game_sprite_atlas ref, id game_sprite_atlas_id) (ok b8, te
 
 struct game_client_save_state
 {
+    user_name     string63;
+    user_password string63;
+    sprite_path   string255;
     name_color    color_hsva;
     body_color    color_hsva;
-    user_name     string255;
-    user_password string255;
-    sprite_path   string255;
 }
 
 enum game_sprite_view_direction
@@ -185,7 +187,7 @@ def client_save_state_path = "client_save_state.bin";
 
 struct game_player
 {
-    name       string255;
+    name       string63;
     name_color rgba8;
     body_color rgba8;
 
@@ -219,8 +221,8 @@ func init(client game_client ref, network platform_network ref, server_address p
 
     init(client.game ref);
 
-    print("Client Up and Running!\n");
-    client.state = client_state.connecting;    
+    network_print("Client: started. version: %, port: %\n, print level: %, debug: %, enable_hot_reloading: %", game_version, client.socket.port, network_print_max_level, lang_debug, enable_hot_reloading);
+    client.state = client_state.connecting;
     client.server_address = server_address;
 }
 
@@ -241,6 +243,9 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         var result = receive(network, client.socket);
         if not result.ok
             break;
+
+        if result.address is_not client.server_address
+            continue;
 
         switch result.message.tag
         case network_message_tag.login_accept
@@ -350,7 +355,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             player.chat_message_timeout = 1;
         }
 
-        print("Client: GOTTEM! % %\n", result.message.tag, result.address);
+        network_print_info("Client: server message % %\n", result.message.tag, result.address);
     }
 
     switch client.state
@@ -382,11 +387,18 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.login.body_color = to_rgba8(client.body_color.color);
 
             send(network, message, client.socket, client.server_address);
-            print("Client: reconnecting\n");
+            network_print_info("Client: reconnecting\n");
         }
     }
     case client_state.online
     {
+        // trottle send rete
+        client.tick_send_timeout -= delta_seconds * server_seconds_per_tick;
+        if client.tick_send_timeout > 0
+            break;
+
+        client.tick_send_timeout -= 1.0;
+
         if client.do_shutdown_server
         {
             client.do_shutdown_server = false;
@@ -413,6 +425,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             send(network, message, client.socket, client.server_address);
             reset_heartbeat = true;
         }
+
+        client.frame_input = {} network_message_user_input;
     }
 
     client.send_chat_message = false;
@@ -451,7 +465,7 @@ func find_player(client game_client ref, entity_id game_entity_id) (player game_
     {
         if client.player_count >= client.players.count
         {
-            print("Client: can't add more remote player\n");
+            network_print_info("Client: can't add more remote player\n");
             return null;
         }
 

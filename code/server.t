@@ -40,8 +40,8 @@ struct game_client_connection
 
 struct game_user
 {
-    name     string255;
-    password string255;
+    name     string63;
+    password string63;
     is_admin b8;
 }
 
@@ -57,7 +57,7 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
 {
     server.socket = platform_network_bind(network, server_port);
     require(platform_network_is_valid(server.socket));
-    network_print("Server Up and Running!\n");
+    network_print("Server: started. version: %, port: %, print level: %, debug: %\n", game_version, server_port, network_print_max_level, lang_debug);
 
     var result = try_platform_read_entire_file(platform, tmemory, server_user_path);
     if result.ok
@@ -149,7 +149,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         {
                             if server.clients[client_index].user_index is i
                             {
-                                network_print("Server: rejected player, user is already logged in! % %\n", from_string255(message.name), result.address);
+                                network_print_info("Server: rejected player, user is already logged in! % %\n", to_string(message.name), result.address);
                                 reject_reason = network_message_reject_reason.duplicated_user_login;
                                 break check_reject;
                             }
@@ -162,14 +162,14 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 if (found_user_index is u32_invalid_index) and (server.users.user_count >= server.users.count)
                 {
-                    network_print("Server: rejected user, server users are full! %\n", result.address);
+                    network_print_info("Server: rejected user, server users are full! %\n", result.address);
                     reject_reason = network_message_reject_reason.server_full_total_user;
                     break check_reject;
                 }
 
                 if (found_client_index is u32_invalid_index) and (server.client_count >= server.clients.count)
                 {
-                    network_print("Server: rejected player, game is full! %\n", result.address);
+                    network_print_info("Server: rejected player, game is full! %\n", result.address);
                     reject_reason = network_message_reject_reason.server_full_active_player;
                     break check_reject;
                 }
@@ -209,7 +209,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     client.entity_id = add_player(game, client.entity_network_id);
                     client.user_index = found_user_index;
 
-                    network_print("Server: added Client %\n", result.address);
+                    network_print_info("Server: added Client %\n", result.address);
                 }
 
                 assert(client.user_index is found_user_index);
@@ -225,7 +225,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         {
             var entity = get(game, client.entity_id);
             assert(entity);
-            entity.movement += result.message.user_input.movement * result.message.user_input.delta_seconds;
+            entity.movement += result.message.user_input.movement;
 
             if result.message.user_input.do_attack
             {
@@ -280,7 +280,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             client.missed_heartbeat_count = 0;
         }
 
-        network_print("Server: GOTTEM! % %\n", result.message.tag, result.address);
+        network_print_info("Server: client message % %\n", result.message.tag, result.address);
     }
 
     // disconnect users that missed too many heartbeats
@@ -315,13 +315,36 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 send(network, message, server.socket, other.address);
             }
 
-            network_print("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
+            network_print_info("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
             remove(game, client.entity_id);
             server.client_count -= 1;
             server.clients[a] = server.clients[server.client_count];
             a -= 1; // repeat index
         }
     }
+
+    // broadcast remove entity
+    // before update, so entity is not deleted yet
+    loop var i u32; game.entity.count
+    {
+        if (not game.active[i])
+            continue;
+
+        if game.do_delete[i]
+        {
+            loop var a u32; server.client_count
+            {
+                var client = server.clients[a] ref;
+
+                var message network_message_union;
+                message.tag = network_message_tag.delete_entity;
+                message.delete_entity.id = game.network_id[i];
+                send(network, message, server.socket, client.address);
+            }
+        }
+    }
+
+    update(server.game ref, delta_seconds);
 
     loop var a u32; server.client_count
     {
@@ -371,25 +394,15 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         loop var i u32; game.entity.count
         {
-            if (not game.active[i])
+            if not game.active[i] or not game.do_update[i]
                 continue;
 
-            if game.do_delete[i]
-            {
-                var message network_message_union;
-                message.tag = network_message_tag.delete_entity;
-                message.delete_entity.id = game.network_id[i];
-                send(network, message, server.socket, client.address);
-            }
-            else if game.do_update[i]
-            {
-                var entity = game.entity[i];
-                var message network_message_union;
-                message.tag = network_message_tag.update_entity;
-                message.update_entity.id     = game.network_id[i];
-                message.update_entity.entity = entity;
-                send(network, message, server.socket, client.address);
-            }
+            var entity = game.entity[i];
+            var message network_message_union;
+            message.tag = network_message_tag.update_entity;
+            message.update_entity.id     = game.network_id[i];
+            message.update_entity.entity = entity;
+            send(network, message, server.socket, client.address);
         }
     }
 
@@ -405,7 +418,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
     }
 }
 
-func add_user(server game_server ref, name string255, password string255) (user game_user ref, user_index u32)
+func add_user(server game_server ref, name string63, password string63) (user game_user ref, user_index u32)
 {
     if server.users.user_count >= server.users.count
         return null, 0;
@@ -419,7 +432,7 @@ func add_user(server game_server ref, name string255, password string255) (user 
     user.name     = name;
     user.password = password;
 
-    network_print("Server: added user % %\n", from_string255(name), user_index);
+    network_print_info("Server: added user % %\n", to_string(name), user_index);
 
     return user, user_index;
 }
