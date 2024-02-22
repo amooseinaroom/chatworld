@@ -138,7 +138,7 @@ func game_update program_update_type
     var font = state.font;
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
-    print(ui, 10, font, cursor ref, "version: %, fps: %\n", game_version, 1.0 / platform.delta_seconds);
+    print(ui, 10, font, cursor ref, "version: %, fps: %, latency: %ms\n", game_version, 1.0 / platform.delta_seconds, client.latency_milliseconds);
 
     if enable_font_cycling
         print(ui, 10, font, cursor ref, "font: % [%]\n", font_paths[font_index], font_index);

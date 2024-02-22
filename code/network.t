@@ -38,6 +38,7 @@ enum network_message_tag
     login_accept;
     login_reject;
     heartbeat;
+    latency;
     user_input;
     add_player;
     remove_player;
@@ -96,6 +97,16 @@ struct network_message_login_reject
 
 type network_message_heartbeat network_message_base;
 
+struct network_message_latency
+{
+    expand base network_message_base;
+
+    latency_id           u32;
+    latency_milliseconds u32; // server computed
+}
+
+def invalid_latency_id = 0 cast(u32);
+
 struct network_message_user_input
 {
     expand base network_message_base;
@@ -152,6 +163,7 @@ type network_message_union union
     login_accept  network_message_login_accept;
     login_reject  network_message_login_reject;
     heartbeat     network_message_heartbeat;
+    latency       network_message_latency;
     user_input    network_message_user_input;
     add_player    network_message_add_player;
     remove_player network_message_remove_player;

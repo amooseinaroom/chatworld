@@ -30,6 +30,8 @@ struct game_client
     reconnect_count   u32;
     reject_reason network_message_reject_reason;
 
+    latency_milliseconds u32;
+
     tick_send_timeout f32;
 
     frame_input network_message_user_input;
@@ -238,6 +240,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             client.players[i].chat_message_timeout -= delta_seconds * 0.1;
     }
 
+    var reply_latency_id = invalid_latency_id;
+
     while true
     {
         var result = receive(network, client.socket);
@@ -354,6 +358,13 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             player.chat_message = message.text;
             player.chat_message_timeout = 1;
         }
+        case network_message_tag.latency
+        {
+            assert(result.message.latency.latency_id is_not invalid_latency_id);
+
+            client.latency_milliseconds = result.message.latency.latency_milliseconds;
+            reply_latency_id = result.message.latency.latency_id;
+        }
 
         network_print_info("Client: server message % %\n", result.message.tag, result.address);
     }
@@ -446,6 +457,14 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.tag = network_message_tag.heartbeat;
             send(network, message, client.socket, client.server_address);
         }
+    }
+
+    if reply_latency_id is_not invalid_latency_id
+    {
+        var message network_message_union;
+        message.tag = network_message_tag.latency;
+        message.latency.latency_id = reply_latency_id;
+        send(network, message, client.socket, client.server_address);
     }
 }
 

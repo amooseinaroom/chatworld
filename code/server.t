@@ -12,6 +12,10 @@ struct game_server
 
     next_network_id u32;
 
+    latency_timestamp_milliseconds u64;
+    latency_timeout                f32;
+    latency_id                     u32;
+
     do_shutdown b8;
 }
 
@@ -28,6 +32,8 @@ struct game_client_connection
     do_update  b8;
     is_new     b8;
     do_remove  b8;
+
+    latency_milliseconds u32;
 
     heartbeat_timeout      f32;
     missed_heartbeat_count u32;
@@ -88,6 +94,8 @@ func new_network_id(server game_server ref) (id u32)
 func tick(platform platform_api ref, server game_server ref, network platform_network ref, delta_seconds f32)
 {
     var game = server.game ref;
+
+    var timestamp_milliseconds = platform_local_timestamp_milliseconds(platform);
 
     while true
     {
@@ -244,6 +252,13 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
         case network_message_tag.heartbeat
         {
+        }
+        case network_message_tag.latency
+        {
+            if result.message.latency.latency_id is server.latency_id
+            {
+                client.latency_milliseconds = (timestamp_milliseconds - server.latency_timestamp_milliseconds) cast(u32);
+            }
         }
         case network_message_tag.chat
         {
@@ -402,6 +417,31 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             message.tag = network_message_tag.update_entity;
             message.update_entity.id     = game.network_id[i];
             message.update_entity.entity = entity;
+            send(network, message, server.socket, client.address);
+        }
+    }
+
+    def latency_checks_per_second = server_ticks_per_second * 0.25;
+    server.latency_timeout -= delta_seconds * latency_checks_per_second;
+    if server.latency_timeout <= 0
+    {
+        server.latency_timeout += 1.0;
+
+        server.latency_id += 1;
+
+        if server.latency_id is invalid_latency_id
+            server.latency_id += 1;
+
+        server.latency_timestamp_milliseconds = platform_local_timestamp_milliseconds(platform);
+
+        var message network_message_union;
+        message.tag = network_message_tag.latency;
+        message.latency.latency_id  = server.latency_id;
+
+        loop var a u32; server.client_count
+        {
+            var client = server.clients[a] ref;
+            message.latency.latency_milliseconds = client.latency_milliseconds;
             send(network, message, server.socket, client.address);
         }
     }
