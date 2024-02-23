@@ -39,6 +39,8 @@ struct game_client
     players      game_player[max_player_count];
     player_count u32;
 
+    player_predicted_position vec2;
+
     is_admin b8;
     do_shutdown_server b8;
 

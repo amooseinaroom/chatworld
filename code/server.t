@@ -257,7 +257,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         {
             if result.message.latency.latency_id is server.latency_id
             {
-                client.latency_milliseconds = (timestamp_milliseconds - server.latency_timestamp_milliseconds) cast(u32);
+                client.latency_milliseconds = ((timestamp_milliseconds - server.latency_timestamp_milliseconds) / 2) cast(u32);
             }
         }
         case network_message_tag.chat
@@ -367,6 +367,18 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         var client_name = server.users[client.user_index].name;
 
+        var player_entity_index = client.entity_id.index_plus_one - 1;
+
+        var player = get(game, client.entity_id);
+        var player_network_id = game.network_id[player_entity_index];
+
+        var do_update_player = game.do_update[player_entity_index];
+        var movement = player.movement * (1 / delta_seconds);
+        var position = player.position;
+
+        // HACK:
+        player.movement = {} vec2;
+
         loop var b u32; server.client_count
         {
             var other = server.clients[b] ref;
@@ -405,6 +417,22 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.chat.text = client.chat_message;
                 send(network, message, server.socket, other.address);
             }
+
+            // send predicted player position
+            if do_update_player
+            {
+                var entity = player deref;
+                // predict future position on other depending on latency
+
+                if true
+                    entity.position += movement * ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0);
+
+                var message network_message_union;
+                message.tag = network_message_tag.update_entity;
+                message.update_entity.id     = player_network_id;
+                message.update_entity.entity = entity;
+                send(network, message, server.socket, client.address);
+            }
         }
 
         loop var i u32; game.entity.count
@@ -413,6 +441,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 continue;
 
             var entity = game.entity[i];
+
+            if entity.tag is game_entity_tag.player
+                continue;
+
             var message network_message_union;
             message.tag = network_message_tag.update_entity;
             message.update_entity.id     = game.network_id[i];

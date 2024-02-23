@@ -26,6 +26,11 @@ init(memory ref);
 
 platform_enable_console();
 
+// we have a window without using it, so we can see the server is actually running
+// and close the window to shut it down properly
+var window platform_window;
+platform_window_init(platform ref, window ref, "chatworld server", 640, 480);
+
 var program server_program ref;
 allocate(memory ref, program ref);
 
@@ -91,9 +96,11 @@ platform_update_time(platform ref);
 
 while platform_handle_messages(platform ref)
 {
+    platform_window_frame(platform ref, window ref);
+
     tick(platform ref, server, network, platform.delta_seconds);
 
-    if server.do_shutdown
+    if server.do_shutdown or window.do_close
         break;
 
     var sleep_seconds = maximum(0, server_seconds_per_tick - platform.delta_seconds);

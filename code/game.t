@@ -1,4 +1,6 @@
 
+def player_movement_speed = 6;
+
 struct game_state
 {
     camera_position vec2;
@@ -164,6 +166,20 @@ func update(game game_state ref, delta_seconds f32)
                 remove(game, { i + 1, game.generation[i] } game_entity_id);
                 continue;
             }
+        }
+        case game_entity_tag.player
+        {
+            var max_distance = player_movement_speed * delta_seconds;
+            var distance = squared_length(entity.movement);
+            var allowed_distance = minimum(max_distance, distance);
+            var movement vec2;
+
+            if distance > 0.0
+                movement = entity.movement * (allowed_distance / distance);
+
+            // HACK:
+            entity.position += movement;
+            entity.movement = movement; // we need it to send predicted position to the clients {} vec2;
         }
         else
         {

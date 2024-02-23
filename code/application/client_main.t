@@ -358,14 +358,14 @@ func game_update program_update_type
                 var do_attack = platform_key_is_active(platform, "J"[0]);
 
                 movement = normalize_or_zero(movement);
+                movement *= (player_movement_speed * platform.delta_seconds);
 
                 var entity = get(game, player.entity_id);
 
-                var movement_speed = 6;
-                // player.position += movement * (movement_speed * platform.delta_seconds);
-
-                client.frame_input.movement += movement * (movement_speed * platform.delta_seconds);
+                client.frame_input.movement += movement;
                 client.frame_input.do_attack or= do_attack;
+
+                client.player_predicted_position += movement;
 
                 var tile_frame = 4;
                 if entity.position.x > (game.camera_position.x + (tiles_per_width * 0.5) - tile_frame)
@@ -401,6 +401,7 @@ func game_update program_update_type
                     draw_box(ui, game_render_layer.ground, color, box);
                 }
             }
+
 
             loop var i u32; client.player_count
             {
@@ -490,6 +491,30 @@ func game_update program_update_type
                     var chat_color = [ 245, 245, 245, alpha ] rgba8;
                     draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
                 }
+            }
+
+            // local player prediction
+            if client.player_count
+            {
+                var sprite_texture_box box2;
+                sprite_texture_box.min = [ 0, 0 ] vec2;
+                sprite_texture_box.max = [ 128, 128 ] vec2;
+
+                var player = client.players[0];
+                var position = client.player_predicted_position;
+                position = floor({ position.x - 0.5, position.y } vec2 * tile_size) + tile_offset;
+
+                var body_color = player.body_color;
+                body_color.r = 255 - body_color.r;
+                body_color.g = 255 - body_color.g;
+                body_color.b = 255 - body_color.b;
+                body_color.alpha = 128;
+
+                var name_color = player.name_color;
+                name_color.alpha = 128;
+
+                var box = draw_player(ui, position, tile_size, body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+                draw_player_name(ui, font, position, tile_size, to_string(player.name), name_color);
             }
 
             loop var i u32; game.entity.count
