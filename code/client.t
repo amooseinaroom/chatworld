@@ -19,11 +19,23 @@ struct game_client_persistant_state
     user_password      string63;
 };
 
+struct game_client_state
+{
+    expand base game_state;
+
+    predicted_position vec2[max_entity_count];
+}
+
+func get(game game_client_state ref, id game_entity_id) (entity game_entity ref)
+{
+    return get(game.base ref, id);
+}
+
 struct game_client
 {
     expand persistant_state game_client_persistant_state;
 
-    game game_state;
+    game game_client_state;
 
     state client_state;
     reconnect_timeout f32;
@@ -38,8 +50,6 @@ struct game_client
 
     players      game_player[max_player_count];
     player_count u32;
-
-    player_predicted_position vec2;
 
     is_admin b8;
     do_shutdown_server b8;
@@ -223,7 +233,7 @@ func init(client game_client ref, network platform_network ref, server_address p
         require(platform_network_is_valid(client.socket));
     }
 
-    init(client.game ref);
+    init(client.game.base ref);
 
     network_print("Client: started. version: %, port: %\n, print level: %, debug: %, enable_hot_reloading: %", game_version, client.socket.port, network_print_max_level, lang_debug, enable_hot_reloading);
     client.state = client_state.connecting;
@@ -232,7 +242,7 @@ func init(client game_client ref, network platform_network ref, server_address p
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
 {
-    var game = client.game ref;
+    var game = client.game.base ref;
 
     var reset_heartbeat = false;
 

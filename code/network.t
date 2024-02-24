@@ -8,7 +8,7 @@ def heartbeat_period = 5.0;
 def heartbeats_per_seconds = 1.0 / heartbeat_period;
 def max_missed_heartbeats = 2;
 
-def max_player_count = 4;
+def max_player_count = 256;
 
 def enable_network_print    = true;
 def network_print_max_level = network_print_level.crucial;

@@ -10,15 +10,15 @@ struct game_state
 
     // entity manager
 
+    entity_count u32;
+
+    freelist     u32[max_entity_count];
     generation   u32[max_entity_count];
     active       b8[max_entity_count];
     network_id   u32[max_entity_count];
     do_update    b8[max_entity_count];
     do_delete    b8[max_entity_count];
     entity       game_entity[max_entity_count];
-
-    freelist     u32[max_entity_count];
-    entity_count u32;
 }
 
 // COMPILER BUG: somehow sets the type to u8

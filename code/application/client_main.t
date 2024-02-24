@@ -365,7 +365,7 @@ func game_update program_update_type
                 client.frame_input.movement += movement;
                 client.frame_input.do_attack or= do_attack;
 
-                client.player_predicted_position += movement;
+                game.predicted_position[player.entity_id.index_plus_one - 1] += movement;
 
                 var tile_frame = 4;
                 if entity.position.x > (game.camera_position.x + (tiles_per_width * 0.5) - tile_frame)
@@ -402,13 +402,13 @@ func game_update program_update_type
                 }
             }
 
-
             loop var i u32; client.player_count
             {
                 var player = client.players[i];
                 var entity = get(game, player.entity_id);
 
-                var position = entity.position;
+                // var position = entity.position;
+                var position = game.predicted_position[player.entity_id.index_plus_one - 1];
                 position = floor({ position.x - 0.5, position.y } vec2 * tile_size) + tile_offset;
 
                 var sprite_texture_box box2;
@@ -493,7 +493,7 @@ func game_update program_update_type
                 }
             }
 
-            // local player prediction
+            // actual server send position
             if client.player_count
             {
                 var sprite_texture_box box2;
@@ -501,7 +501,8 @@ func game_update program_update_type
                 sprite_texture_box.max = [ 128, 128 ] vec2;
 
                 var player = client.players[0];
-                var position = client.player_predicted_position;
+                var entity = get(game, player.entity_id);
+                var position = entity.position;
                 position = floor({ position.x - 0.5, position.y } vec2 * tile_size) + tile_offset;
 
                 var body_color = player.body_color;
@@ -520,7 +521,7 @@ func game_update program_update_type
             loop var i u32; game.entity.count
             {
                 if not game.active[i]
-                continue;
+                    continue;
 
                 var entity = game.entity[i] ref;
 

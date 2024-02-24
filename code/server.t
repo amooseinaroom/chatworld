@@ -257,7 +257,13 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         {
             if result.message.latency.latency_id is server.latency_id
             {
-                client.latency_milliseconds = ((timestamp_milliseconds - server.latency_timestamp_milliseconds) / 2) cast(u32);
+                var round_trip_milliseconds = timestamp_milliseconds - server.latency_timestamp_milliseconds;
+
+                // avarage over last 10 latencies
+                if not client.latency_milliseconds
+                    client.latency_milliseconds = (round_trip_milliseconds / 2) cast(u32);
+                else
+                    client.latency_milliseconds = (client.latency_milliseconds * 0.9 + (round_trip_milliseconds cast(f32) * 0.05)) cast(u32);
             }
         }
         case network_message_tag.chat
@@ -361,6 +367,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
     update(server.game ref, delta_seconds);
 
+    // prevent spikes when delta_seconds is very low
+    var prediction_movement_scale f32;
+    if delta_seconds >= 0.01
+        prediction_movement_scale = (1 / delta_seconds);
+
     loop var a u32; server.client_count
     {
         var client = server.clients[a] ref;
@@ -373,7 +384,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         var player_network_id = game.network_id[player_entity_index];
 
         var do_update_player = game.do_update[player_entity_index];
-        var movement = player.movement * (1 / delta_seconds);
+
+        var movement = player.movement * prediction_movement_scale;
         var position = player.position;
 
         // HACK:
