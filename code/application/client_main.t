@@ -520,7 +520,7 @@ func game_update program_update_type
             }
 
             // actual server send position
-            if true and client.player_count
+            if false and client.player_count
             {
                 var sprite_texture_box box2;
                 sprite_texture_box.min = [ 0, 0 ] vec2;
