@@ -1,3 +1,4 @@
+import random;
 
 def player_movement_speed = 6;
 
@@ -8,9 +9,13 @@ struct game_state
 
     is_chatting b8;
 
+    random random_pcg;
+
     // entity manager
 
     entity_count u32;
+
+    entity_tag_count u32[game_entity_tag.count];
 
     freelist     u32[max_entity_count];
     generation   u32[max_entity_count];
@@ -23,6 +28,8 @@ struct game_state
 
 // COMPILER BUG: somehow sets the type to u8
 def max_entity_count = (1 bit_shift_left 14) cast(u32);
+
+def game_world_size = [ 256, 256 ] vec2;
 
 type game_entity_id union
 {
@@ -41,21 +48,37 @@ struct game_entity
     position vec2;
     movement vec2;
     collider sphere2;
-    lifetime f32;
+
+    expand tags union
+    {
+        fireball struct
+        {
+            lifetime f32;
+        };
+
+        chicken struct
+        {
+            is_moving              b8;
+            toggle_moveing_timeout f32;
+        };
+    };
 }
 
 enum game_entity_tag
 {
     player;
     fireball;
+    chicken;
 }
 
-func init(game game_state ref)
+func init(game game_state ref, random random_pcg)
 {
     clear_value(game);
 
     loop var i u32; game.freelist.count
         game.freelist[i] = i;
+
+    game.random = random;
 }
 
 func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_entity_id)
@@ -65,6 +88,8 @@ func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_enti
     assert(game.entity_count < game.entity.count);
     var index = game.freelist[game.entity_count];
     game.entity_count += 1;
+
+    game.entity_tag_count[tag] += 1;
 
     game.generation[index] += 1;
     game.entity[index] = {} game_entity;
@@ -85,7 +110,10 @@ func add_player(game game_state ref, network_id u32) (id game_entity_id)
 {
     var id = add(game, game_entity_tag.player, network_id);
     var entity = get(game, id);
-    entity.collider = { [ 0, 0.5 ] vec2, 0.5 } sphere2;
+
+    // this is set so that it aligns well with the sprites
+    var radius = 0.375;
+    entity.collider = { [ 0, 0.0625 + radius ] vec2, radius } sphere2;
 
     return id;
 }
@@ -97,7 +125,15 @@ func add_fireball(game game_state ref, network_id u32, position vec2, movement v
     entity.collider = { {} vec2, 0.25 } sphere2;
     entity.position = position;
     entity.movement = movement;
-    entity.lifetime = 4;
+    entity.fireball.lifetime = 4;
+}
+
+func add_chicken(game game_state ref, network_id u32, position vec2)
+{
+    var id = add(game, game_entity_tag.chicken, network_id);
+    var entity = get(game, id);
+    entity.collider = { {} vec2, 0.333 } sphere2;
+    entity.position = position;
 }
 
 func remove(game game_state ref, id game_entity_id)
@@ -118,9 +154,14 @@ func remove_for_real(game game_state ref, id game_entity_id)
     assert(game.active[index]);
     game.active[index] = false;
 
+    var tag = game.entity[index].tag;
+    assert(game.entity_tag_count[tag]);
+    game.entity_tag_count[tag] -= 1;
+
     assert(game.entity_count);
     game.entity_count -= 1;
     game.freelist[game.entity_count] = index;
+
 }
 
 func get(game game_state ref, id game_entity_id) (entity game_entity ref)
@@ -160,8 +201,8 @@ func update(game game_state ref, delta_seconds f32)
         case game_entity_tag.fireball
         {
             entity.position += entity.movement * delta_seconds;
-            entity.lifetime -= delta_seconds;
-            if entity.lifetime <= 0
+            entity.fireball.lifetime -= delta_seconds;
+            if entity.fireball.lifetime <= 0
             {
                 remove(game, { i + 1, game.generation[i] } game_entity_id);
                 continue;
@@ -181,10 +222,56 @@ func update(game game_state ref, delta_seconds f32)
             entity.position += movement;
             entity.movement = movement; // we need it to send predicted position to the clients {} vec2;
         }
+        case game_entity_tag.chicken
+        {
+            var chicken = entity.chicken ref;
+            chicken.toggle_moveing_timeout -= delta_seconds;
+            if chicken.toggle_moveing_timeout <= 0
+            {
+                chicken.is_moving = not chicken.is_moving;
+
+                if chicken.is_moving
+                {
+                    var direction_angle = random_f32_zero_to_one(game.random ref) * pi32 * 2;
+                    var direction = [ cos(direction_angle), sin(direction_angle) ] vec2;
+
+                    chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 10 + 0.5;
+                    entity.movement = direction;
+                }
+                else
+                {
+                    chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 4 + 1;
+                    entity.movement = {} vec2;
+                }
+            }
+
+            if chicken.is_moving
+            {
+                def chicken_movement_speed = 2.0;
+                entity.position += entity.movement * (chicken_movement_speed * delta_seconds);
+            }
+        }
         else
         {
             entity.position += entity.movement;
             entity.movement = {} vec2;
+        }
+
+        // simple world bounds
+        {
+            var position = entity.position + entity.collider.center;
+            var radius = entity.collider.radius;
+            if position.x - radius < 0
+                position.x = radius;
+            else if position.x + radius > game_world_size.x
+                position.x = game_world_size.x - radius;
+
+            if position.y - radius < 0
+                position.y = radius;
+            else if position.y + radius > game_world_size.y
+                position.y = game_world_size.y - radius;
+
+            entity.position = position - entity.collider.center;
         }
 
         game.do_update[i] = squared_length(position - entity.position) > 0;

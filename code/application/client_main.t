@@ -91,9 +91,13 @@ func game_update program_update_type
     menu.ui = ui;
     menu.characters = { platform.character_count, platform.character_buffer.base } platform_character[];
 
+    var game = client.game ref;
+
     var tiles_per_width = 20;
     var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
     var tile_size = ui.viewport_size.width / tiles_per_width;
+
+    var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
 
     // reload and cycle font
 
@@ -272,8 +276,8 @@ func game_update program_update_type
             sprite_texture_box.min = [ 0, 0 ] vec2;
             sprite_texture_box.max = [ 128, 128 ] vec2;
 
-            var box = draw_player(ui, position, tile_size, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
-            draw_player_name(ui, font, position, tile_size, to_string(client.user_name), to_rgba8(client.name_color.color));
+            var box = draw_player(ui, position, tile_size, tile_offset, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+            draw_player_name(ui, font, position, tile_size, tile_offset, to_string(client.user_name), to_rgba8(client.name_color.color));
 
             cursor.position.y = box.min.y cast(s32);
             advance_line(font.info, cursor ref);
@@ -311,8 +315,6 @@ func game_update program_update_type
 
         if (client.state is client_state.online)
         {
-            var game = client.game ref;
-
             if client.is_admin
                 print(ui, 10, font, cursor ref, "Admin User");
 
@@ -381,13 +383,38 @@ func game_update program_update_type
 
             // update(game, platform.delta_seconds);
 
-
-
-            var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
-
-            loop var y; 100
+            // override local player position for a smoother experiance
+            var player_predicted_position vec2;
+            if client.player_count
             {
-                loop var x; 100
+                var player = client.players[0];
+                var entity = get(game, player.entity_id);
+                var position = entity.position;
+
+                player_predicted_position = game.predicted_position[player.entity_id.index_plus_one - 1];
+
+                //if squared_length(player_predicted_position - position) > 1
+                // player_predicted_position = position; // lerp(player_predicted_position, position, 0.5);
+                player_predicted_position = lerp(player_predicted_position, position, 0.5);
+            }
+
+            loop var i u32; game.entity.count
+            {
+                if not game.active[i]
+                    continue;
+
+                game.predicted_position[i] = game.entity[i].position;
+            }
+
+            if client.player_count
+            {
+                var player = client.players[0];
+                game.predicted_position[player.entity_id.index_plus_one - 1] = player_predicted_position;
+            }
+
+            loop var y; game_world_size.y
+            {
+                loop var x; game_world_size.x
                 {
                     var box box2;
                     box.min = floor({ x, y } vec2 * tile_size) + tile_offset;
@@ -409,14 +436,13 @@ func game_update program_update_type
 
                 // var position = entity.position;
                 var position = game.predicted_position[player.entity_id.index_plus_one - 1];
-                position = floor({ position.x - 0.5, position.y } vec2 * tile_size) + tile_offset;
 
                 var sprite_texture_box box2;
                 sprite_texture_box.min = [ 0, 0 ] vec2;
                 sprite_texture_box.max = [ 128, 128 ] vec2;
 
-                var box = draw_player(ui, position, tile_size, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
-                draw_player_name(ui, font, position, tile_size, to_string(player.name), player.name_color);
+                var box = draw_player(ui, position, tile_size, tile_offset, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+                draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), player.name_color);
 
                 if player.chat_message_timeout > 0
                 {
@@ -494,7 +520,7 @@ func game_update program_update_type
             }
 
             // actual server send position
-            if client.player_count
+            if true and client.player_count
             {
                 var sprite_texture_box box2;
                 sprite_texture_box.min = [ 0, 0 ] vec2;
@@ -503,7 +529,6 @@ func game_update program_update_type
                 var player = client.players[0];
                 var entity = get(game, player.entity_id);
                 var position = entity.position;
-                position = floor({ position.x - 0.5, position.y } vec2 * tile_size) + tile_offset;
 
                 var body_color = player.body_color;
                 body_color.r = 255 - body_color.r;
@@ -514,8 +539,8 @@ func game_update program_update_type
                 var name_color = player.name_color;
                 name_color.alpha = 128;
 
-                var box = draw_player(ui, position, tile_size, body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
-                draw_player_name(ui, font, position, tile_size, to_string(player.name), name_color);
+                var box = draw_player(ui, position, tile_size, tile_offset, body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+                draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), name_color);
             }
 
             loop var i u32; game.entity.count
@@ -532,6 +557,14 @@ func game_update program_update_type
                     box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
                     box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
                     var color = [ 255, 128, 25, 255 ] rgba8;
+                    draw_box(ui, 2, color, box);
+                }
+                case game_entity_tag.chicken
+                {
+                    var box box2;
+                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
+                    var color = [ 240, 240, 240, 255 ] rgba8;
                     draw_box(ui, 2, color, box);
                 }
             }
@@ -557,10 +590,11 @@ enum render_texture_slot render_texture_slot_base
 {
 }
 
-def player_draw_alignment = [ 0.5, 8.0 / 128.0 ] vec2;
+def player_draw_alignment = [ 0.5, 0 ] vec2; // 8.0 / 128.0 ] vec2;
 
-func get_player_box(position vec2, tile_size f32) (box box2)
+func get_player_box(position vec2, tile_size f32, tile_offset vec2) (box box2)
 {
+    position = floor(position * tile_size) + tile_offset;
     var alignment = player_draw_alignment;
 
     var box box2;
@@ -577,15 +611,15 @@ enum game_render_layer
     overlay;
 }
 
-func draw_player_name(ui ui_system ref, font ui_font, position vec2, tile_size f32, name string, name_color rgba8)
+func draw_player_name(ui ui_system ref, font ui_font, position vec2, tile_size f32, tile_offset vec2, name string, name_color rgba8)
 {
-    var box = get_player_box(position, tile_size);
+    var box = get_player_box(position, tile_size, tile_offset);
     print_aligned(ui, game_render_layer.overlay, name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", name);
 }
 
-func draw_player(ui ui_system ref, position vec2, tile_size f32, body_color rgba8, use_sprite b8, sprite_texture gl_texture, sprite_texture_box box2, view_direction game_sprite_view_direction) (box box2)
+func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec2, body_color rgba8, use_sprite b8, sprite_texture gl_texture, sprite_texture_box box2, view_direction game_sprite_view_direction) (box box2)
 {
-    var box = get_player_box(position, tile_size);
+    var box = get_player_box(position, tile_size, tile_offset);
 
     // if false and state.has_user_sprite
     if use_sprite

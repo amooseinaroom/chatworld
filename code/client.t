@@ -233,7 +233,7 @@ func init(client game_client ref, network platform_network ref, server_address p
         require(platform_network_is_valid(client.socket));
     }
 
-    init(client.game.base ref);
+    init(client.game.base ref, {} random_pcg);
 
     network_print("Client: started. version: %, port: %\n, print level: %, debug: %, enable_hot_reloading: %", game_version, client.socket.port, network_print_max_level, lang_debug, enable_hot_reloading);
     client.state = client_state.connecting;

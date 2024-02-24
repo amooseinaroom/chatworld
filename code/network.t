@@ -282,3 +282,8 @@ func skip_name(iterator string ref) (name string)
     var name = try_skip_until_set(iterator, name_blacklist, false);
     return name;
 }
+
+func network_assert assert_type
+{
+    assert(condition_text, condition, location, format, arguments);
+}

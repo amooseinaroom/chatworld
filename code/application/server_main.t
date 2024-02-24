@@ -12,6 +12,10 @@ override def network_print_max_level = network_print_level.info;
 // server_main does not include hot_reloading files
 def enable_hot_reloading = false;
 
+var global global_plaform platform_api ref;
+var global global_memory  memory_arena ref;
+var global global_program server_program ref;
+
 struct server_program
 {
     network platform_network;
@@ -33,6 +37,10 @@ platform_window_init(platform ref, window ref, "chatworld server", 640, 480);
 
 var program server_program ref;
 allocate(memory ref, program ref);
+
+global_plaform = platform ref;
+global_memory  = memory ref;
+global_program = program;
 
 var network = program.network ref;
 platform_network_init(network);
@@ -109,14 +117,40 @@ while platform_handle_messages(platform ref)
         platform_sleep_milliseconds(platform ref, sleep_milliseconds);
 }
 
-// disconnect all clients
-loop var i u32; server.client_count
+shutdown(server, network);
+
+// end of main
+
+func shutdown(server game_server ref, network platform_network ref)
 {
-    var message network_message_union;
-    message.tag = network_message_tag.login_reject;
-    message.login_reject.reason = network_message_reject_reason.server_disconnect;
-    send(network, message, server.socket, server.clients[i].address);
+    // disconnect all clients
+    loop var i u32; server.client_count
+    {
+        var message network_message_union;
+        message.tag = network_message_tag.login_reject;
+        message.login_reject.reason = network_message_reject_reason.server_disconnect;
+        send(network, message, server.socket, server.clients[i].address);
+    }
+
+    platform_network_shutdown(network);
+    network_print("Server: shutdown.\n");
 }
 
-platform_network_shutdown(network);
-network_print("Server: shutdown.\n");
+override func network_assert assert_type
+{
+    if lang_debug
+    {
+        assert(condition_text, condition, location, format, arguments);
+    }
+    else if not condition
+    {
+        var text string;
+        write(global_memory, text ref, "Assertion: %/%\n%(%,%):\n", location.module, location.function, location.file, location.line, location.column);
+        write(global_memory, text ref, "Assertion: \"%\" failed.\n", condition_text);
+        write(global_memory, text ref, format, arguments);
+        platform_write_entire_file(global_plaform, "server_crash.txt", text);
+
+        shutdown(global_program.server ref, global_program.network ref);
+        platform_exit(0);
+    }
+}

@@ -3,6 +3,8 @@ struct game_server
 {
     game game_state;
 
+    random random_pcg;
+
     socket platform_network_socket;
 
     users game_user_buffer;
@@ -15,6 +17,8 @@ struct game_server
     latency_timestamp_milliseconds u64;
     latency_timeout                f32;
     latency_id                     u32;
+
+    chicken_spawn_timeout f32;
 
     do_shutdown b8;
 }
@@ -62,7 +66,7 @@ def server_user_path = "server_users.bin";
 func init(server game_server ref, platform platform_api ref, network platform_network ref, server_port u16, tmemory memory_arena ref)
 {
     server.socket = platform_network_bind(network, server_port);
-    require(platform_network_is_valid(server.socket));
+    network_assert(platform_network_is_valid(server.socket));
     network_print("Server: started. version: %, port: %, print level: %, debug: %\n", game_version, server_port, network_print_max_level, lang_debug);
 
     var result = try_platform_read_entire_file(platform, tmemory, server_user_path);
@@ -73,7 +77,7 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
             copy_bytes(server.users ref, data.base, data.count);
     }
 
-    init(server.game ref);
+    init(server.game ref, platform_get_random_from_time(platform));
 }
 
 func save(platform platform_api ref, server game_server ref)
@@ -195,7 +199,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 if found_user_index is u32_invalid_index
                 {
                     var add_user_result = add_user(server, message.name, message.password);
-                    assert(add_user_result.user);
+                    network_assert(add_user_result.user);
                     found_user_index = add_user_result.user_index;
                 }
 
@@ -220,7 +224,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     network_print_info("Server: added Client %\n", result.address);
                 }
 
-                assert(client.user_index is found_user_index);
+                network_assert(client.user_index is found_user_index);
 
                 var message network_message_union;
                 message.tag = network_message_tag.login_accept;
@@ -232,7 +236,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         case network_message_tag.user_input
         {
             var entity = get(game, client.entity_id);
-            assert(entity);
+            network_assert(entity);
             entity.movement += result.message.user_input.movement;
 
             if result.message.user_input.do_attack
@@ -365,6 +369,16 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
     }
 
+    def chicken_spawns_per_second = 0.1;
+    server.chicken_spawn_timeout -= delta_seconds * chicken_spawns_per_second;
+    if server.chicken_spawn_timeout <= 0
+    {
+        server.chicken_spawn_timeout += 1;
+
+        if game.entity_tag_count[game_entity_tag.chicken] < 128
+            add_chicken(game, new_network_id(server), { 2, 2 } vec2);
+    }
+
     update(server.game ref, delta_seconds);
 
     // prevent spikes when delta_seconds is very low
@@ -396,7 +410,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             var other = server.clients[b] ref;
 
             var entity = get(game, other.entity_id);
-            assert(entity);
+            network_assert(entity);
 
             if client.is_new
             {
@@ -443,7 +457,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.tag = network_message_tag.update_entity;
                 message.update_entity.id     = player_network_id;
                 message.update_entity.entity = entity;
-                send(network, message, server.socket, client.address);
+                send(network, message, server.socket, other.address);
             }
         }
 

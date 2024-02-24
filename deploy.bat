@@ -9,4 +9,4 @@ xcopy /Y assets\fonts\stanberry\Stanberry.ttf %destination%assets\fonts\stanberr
 xcopy /Y customization\character_template.png %destination%customization\character_template.png
 xcopy /Y chatworld.exe        %destination%chatworld.exe
 xcopy /Y server_chatworld.exe %destination%server_chatworld.exe
-xcopy /Y git_commit_id_version.txt %destination%git_commit_id_version.txt
+xcopy /Y git_commit_id_current.txt %destination%git_commit_id_version.txt

@@ -1,6 +1,6 @@
 @echo off
 
-set debug=1
+set debug=0
 set hot_code_reloading=0
 set print_command=0
 
