@@ -397,7 +397,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         var player = get(game, client.entity_id);
         var player_network_id = game.network_id[player_entity_index];
 
-        var do_update_player = game.do_update[player_entity_index];
+        var do_update_player = game.do_update_tick_count[player_entity_index];
 
         var movement = player.movement * prediction_movement_scale;
         var position = player.position;
@@ -448,10 +448,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             if do_update_player
             {
                 var entity = player deref;
-                // predict future position on other depending on latency
 
-                if true
-                    entity.position += movement * ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0);
+                // predict future position on other depending on latency
+                entity.position += movement * ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0);
 
                 var message network_message_union;
                 message.tag = network_message_tag.update_entity;
@@ -463,7 +462,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         loop var i u32; game.entity.count
         {
-            if not game.active[i] or not game.do_update[i]
+            if not game.active[i] or not game.do_update_tick_count[i]
                 continue;
 
             var entity = game.entity[i];

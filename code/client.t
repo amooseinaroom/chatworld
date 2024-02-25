@@ -17,13 +17,16 @@ struct game_client_persistant_state
 
     user_password_edit editable_text;
     user_password      string63;
+
+    local_player_position   vec2;
+    network_player_position vec2;
 };
 
 struct game_client_state
 {
     expand base game_state;
 
-    predicted_position vec2[max_entity_count];
+    // add some client only entity data
 }
 
 func get(game game_client_state ref, id game_entity_id) (entity game_entity ref)

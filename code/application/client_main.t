@@ -322,6 +322,8 @@ func game_update program_update_type
 
             var player = client.players[0] ref;
 
+            var player_predicted_position vec2;
+
             if game.is_chatting
             {
                 client.chat_message_edit.buffer.count = client.chat_message.base.count;
@@ -367,50 +369,36 @@ func game_update program_update_type
                 client.frame_input.movement += movement;
                 client.frame_input.do_attack or= do_attack;
 
-                game.predicted_position[player.entity_id.index_plus_one - 1] += movement;
+                client.local_player_position += movement;
+
+                // client.local_player_position = lerp(client.local_player_position, entity.position, 0.5);
+
+                // smooth local postion to network position
+                client.local_player_position = apply_spring(client.local_player_position, entity.position, 2000, platform.delta_seconds);
+
+                // override player entity position
+                client.network_player_position = entity.position;
+                entity.position = client.local_player_position;
+
+                var position = client.local_player_position;
 
                 var tile_frame = 4;
-                if entity.position.x > (game.camera_position.x + (tiles_per_width * 0.5) - tile_frame)
-                    game.camera_position.x = entity.position.x - (tiles_per_width * 0.5) + tile_frame;
-                else if entity.position.x < (game.camera_position.x - (tiles_per_width * 0.5) + tile_frame)
-                    game.camera_position.x = entity.position.x + (tiles_per_width * 0.5) - tile_frame;
+                var target_camera_position = game.camera_position;
 
-                if entity.position.y > (game.camera_position.y + (tiles_per_height * 0.5) - tile_frame)
-                    game.camera_position.y = entity.position.y - (tiles_per_height * 0.5) + tile_frame;
-                else if entity.position.y < (game.camera_position.y - (tiles_per_height * 0.5) + tile_frame - 1)
-                    game.camera_position.y = entity.position.y + (tiles_per_height * 0.5) - tile_frame + 1;
+                if position.x > (target_camera_position.x + (tiles_per_width * 0.5) - tile_frame)
+                    target_camera_position.x = position.x - (tiles_per_width * 0.5) + tile_frame;
+                else if position.x < (target_camera_position.x - (tiles_per_width * 0.5) + tile_frame)
+                    target_camera_position.x = position.x + (tiles_per_width * 0.5) - tile_frame;
+
+                if position.y > (target_camera_position.y + (tiles_per_height * 0.5) - tile_frame)
+                    target_camera_position.y = position.y - (tiles_per_height * 0.5) + tile_frame;
+                else if position.y < (target_camera_position.y - (tiles_per_height * 0.5) + tile_frame - 1)
+                    target_camera_position.y = position.y + (tiles_per_height * 0.5) - tile_frame + 1;
+
+                game.camera_position = apply_spring(game.camera_position, target_camera_position, 1000, platform.delta_seconds);
             }
 
             // update(game, platform.delta_seconds);
-
-            // override local player position for a smoother experiance
-            var player_predicted_position vec2;
-            if client.player_count
-            {
-                var player = client.players[0];
-                var entity = get(game, player.entity_id);
-                var position = entity.position;
-
-                player_predicted_position = game.predicted_position[player.entity_id.index_plus_one - 1];
-
-                //if squared_length(player_predicted_position - position) > 1
-                // player_predicted_position = position; // lerp(player_predicted_position, position, 0.5);
-                player_predicted_position = lerp(player_predicted_position, position, 0.5);
-            }
-
-            loop var i u32; game.entity.count
-            {
-                if not game.active[i]
-                    continue;
-
-                game.predicted_position[i] = game.entity[i].position;
-            }
-
-            if client.player_count
-            {
-                var player = client.players[0];
-                game.predicted_position[player.entity_id.index_plus_one - 1] = player_predicted_position;
-            }
 
             loop var y; game_world_size.y
             {
@@ -434,8 +422,7 @@ func game_update program_update_type
                 var player = client.players[i];
                 var entity = get(game, player.entity_id);
 
-                // var position = entity.position;
-                var position = game.predicted_position[player.entity_id.index_plus_one - 1];
+                var position = entity.position;
 
                 var sprite_texture_box box2;
                 sprite_texture_box.min = [ 0, 0 ] vec2;
@@ -567,6 +554,13 @@ func game_update program_update_type
                     var color = [ 240, 240, 240, 255 ] rgba8;
                     draw_box(ui, 2, color, box);
                 }
+            }
+
+            if client.player_count
+            {
+                var player = client.players[0];
+                var entity = get(game, player.entity_id);
+                entity.position = client.network_player_position;
             }
         }
     }

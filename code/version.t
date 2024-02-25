@@ -1,2 +1,2 @@
 // game_version is variable, since we auto detect the version change on program start
-var global game_version = 4 cast(u32); // git commit id a5073b57ebf701c2ae08ac71dc1054f2992cf289
+var global game_version = 5 cast(u32); // git commit id e71a5729fa92a1724bc89c408e974e8e996d9e46

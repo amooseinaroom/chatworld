@@ -21,9 +21,11 @@ struct game_state
     generation   u32[max_entity_count];
     active       b8[max_entity_count];
     network_id   u32[max_entity_count];
-    do_update    b8[max_entity_count];
     do_delete    b8[max_entity_count];
     entity       game_entity[max_entity_count];
+
+    // server only maybe
+    do_update_tick_count u8[max_entity_count];
 }
 
 // COMPILER BUG: somehow sets the type to u8
@@ -161,7 +163,6 @@ func remove_for_real(game game_state ref, id game_entity_id)
     assert(game.entity_count);
     game.entity_count -= 1;
     game.freelist[game.entity_count] = index;
-
 }
 
 func get(game game_state ref, id game_entity_id) (entity game_entity ref)
@@ -274,7 +275,12 @@ func update(game game_state ref, delta_seconds f32)
             entity.position = position - entity.collider.center;
         }
 
-        game.do_update[i] = squared_length(position - entity.position) > 0;
+        // update next two ticks if entity moved
+        // this way we send the predicted position and one final rest idle position
+        if squared_length(position - entity.position) > 0
+            game.do_update_tick_count[i] = 2;
+        else if game.do_update_tick_count[i]
+            game.do_update_tick_count[i] -= 1;
     }
 }
 
