@@ -6,7 +6,7 @@ import meta;
 import string;
 
 override def enable_network_print = true;
-override def network_print_max_level = network_print_level.info;
+// override def network_print_max_level = network_print_level.info;
 
 // for some shared files that use this value
 // server_main does not include hot_reloading files

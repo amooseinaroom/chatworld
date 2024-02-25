@@ -148,12 +148,19 @@ struct network_message_delete_entity
     id     u32;
 }
 
+struct network_message_chat_text
+{
+    text string255;
+    is_shouting b8;
+}
+
 struct network_message_chat
 {
     expand base network_message_base;
 
-    text string255;
-    id   u32;
+    id u32;
+
+    text network_message_chat_text;
 }
 
 type network_message_union union

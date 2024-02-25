@@ -324,22 +324,21 @@ func game_update program_update_type
 
             var player_predicted_position vec2;
 
-            if game.is_chatting
+            if client.is_chatting
             {
-                client.chat_message_edit.buffer.count = client.chat_message.base.count;
-                client.chat_message_edit.buffer.base  = client.chat_message.base.base;
-
-                edit_string_begin(client.chat_message_edit ref, client.chat_message ref);
+                edit_string_begin(client.chat_message_edit ref, client.chat_message.text ref);
 
                 edit_text(client.chat_message_edit ref, menu.characters ref);
 
-                edit_string_end(client.chat_message_edit, client.chat_message ref);
+                edit_string_end(client.chat_message_edit, client.chat_message.text ref);
+
+                client.chat_message.is_shouting xor= platform_key_is_active(platform, platform_key.control) and platform_key_was_pressed(platform, "S"[0]);
 
                 if not platform_key_is_active(platform, platform_key.control) and not platform_key_is_active(platform, platform_key.alt) and not platform_key_is_active(platform, platform_key.shift) and platform_key_was_pressed(platform, platform_key.enter)
                 {
                     client.send_chat_message = true;
                     client.chat_message = client.chat_message;
-                    game.is_chatting = false;
+                    client.is_chatting = false;
                 }
             }
             else
@@ -349,10 +348,10 @@ func game_update program_update_type
 
                 if platform_key_was_pressed(platform, platform_key.enter)
                 {
-                    game.is_chatting = true;
+                    client.is_chatting = true;
                     client.chat_message_edit.edit_offset = 0;
                     client.chat_message_edit.used_count  = 0;
-                    client.chat_message.count            = 0;
+                    client.chat_message.text.count       = 0;
                 }
 
                 var movement vec2;
@@ -422,6 +421,8 @@ func game_update program_update_type
                 }
             }
 
+            var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
+
             loop var i u32; client.player_count
             {
                 var player = client.players[i];
@@ -437,32 +438,54 @@ func game_update program_update_type
                 draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), player.name_color);
 
                 if player.chat_message_timeout > 0
+                label draw_chat_box
                 {
-                    var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.5 ] vec2, [ 0.5, 0 ] vec2);
+                    var alpha = pow(player.chat_message_timeout, 0.25);
+                    var colors = get_chat_message_colors(player.chat_message, alpha);
 
-                    var t = pow(player.chat_message_timeout, 0.25);
-                    var alpha = (255 * t) cast(u8);
+                    def shout_distance = tiles_per_width * 3;
+
+                    var text_position = get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.5 ] vec2;
+                    var text_alignment = [ 0.5, 0 ] vec2;
+
+                    if is_contained(text_position, chat_message_frame)
+                    {
+                    }
+                    else if player.chat_message.is_shouting and (squared_length(position - client.local_player_position) <= (shout_distance * shout_distance))
+                    {
+                        text_position = clamp(text_position, chat_message_frame.min, chat_message_frame.max);
+                        text_alignment = (text_position - chat_message_frame.min);
+                        text_alignment.x /= chat_message_frame.max.x - chat_message_frame.min.x;
+                        text_alignment.y /= chat_message_frame.max.y - chat_message_frame.min.y;
+                    }
+                    else
+                    {
+                        break draw_chat_box;
+                    }
+
+                    var aligned_state = draw_aligned_begin(ui, text_position, text_alignment);
 
                     var cursor = cursor_below_position(font.info, 0, 0);
-                    var text_color = [ 10, 10, 10, alpha ] rgba8;
-                    print(ui, 11, text_color, font, cursor ref, to_string(player.chat_message));
+                    print(ui, 11, colors.text_color, font, cursor ref, to_string(player.chat_message.text));
 
+                    draw_rounded_box(ui, 10, colors.box_color, grow(ui.current_box, 8), 6);
                     var box = draw_aligned_end(ui, aligned_state);
-                    var chat_color = [ 245, 245, 245, alpha ] rgba8;
-                    draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
                 }
 
-                if (i is 0) and game.is_chatting
+                if (i is 0) and client.is_chatting
                 {
                     var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 0 ] vec2) - [ 0, tile_size * 0.2 ] vec2, [ 0.5, 1 ] vec2);
 
                     // var t = pow(player.chat_message_timeout, 0.25);
-                    var alpha = 255 cast(u8);
+                    var alpha = 1.0;
 
-                    var text = to_string(client.chat_message);
+                    var text = to_string(client.chat_message.text);
 
                     var cursor = cursor_below_position(font.info, 0, 0);
-                    var text_color = [ 10, 10, 10, alpha ] rgba8;
+
+                    var colors = get_chat_message_colors(client.chat_message, alpha);
+                    var text_color = colors.text_color;
+                    var box_color  = colors.box_color;
 
                     def caret_width = 3;
 
@@ -506,8 +529,7 @@ func game_update program_update_type
                     }
 
                     var box = draw_aligned_end(ui, aligned_state);
-                    var chat_color = [ 245, 245, 245, alpha ] rgba8;
-                    draw_rounded_box(ui, 10, chat_color, grow(box, 8), 6);
+                    draw_rounded_box(ui, 10, box_color, grow(box, 8), 6);
                 }
             }
 

@@ -58,8 +58,9 @@ struct game_client
     do_shutdown_server b8;
 
     chat_message_edit editable_text;
-    chat_message      string255;
+    chat_message      network_message_chat_text;
     send_chat_message b8;
+    is_chatting       b8;
 
     entity_id game_entity_id;
     network_id u32;
@@ -208,7 +209,7 @@ struct game_player
     name_color rgba8;
     body_color rgba8;
 
-    chat_message         string255;
+    chat_message network_message_chat_text;
     chat_message_timeout f32;
 
     entity_id         game_entity_id;
@@ -447,7 +448,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         {
             var message network_message_union;
             message.tag = network_message_tag.chat;
-            message.chat.text = client.chat_message;
+            message.chat.text        = client.chat_message;
             send(network, message, client.socket, client.server_address);
             reset_heartbeat = true;
         }

@@ -44,8 +44,10 @@ struct game_client_connection
 
     fireball_cooldown f32;
 
-    chat_message           string255;
+    chat_message           network_message_chat_text;
     broadcast_chat_message b8;
+    shout_exhaustion       f32;
+    is_shout_exhausted     b8;
 }
 
 struct game_user
@@ -272,8 +274,25 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
         case network_message_tag.chat
         {
-            client.chat_message = result.message.chat.text;
             client.broadcast_chat_message = true;
+
+            if client.is_shout_exhausted
+            {
+                client.chat_message.text = to_string255("...");
+                client.chat_message.is_shouting = false;
+            }
+            else
+            {
+                client.chat_message = result.message.chat.text;
+            }
+
+            if client.chat_message.is_shouting
+            {
+                client.shout_exhaustion += 5.0;
+
+                if client.shout_exhaustion > 30
+                    client.is_shout_exhausted = true;
+            }
         }
         case network_message_tag.admin_server_shutdown
         {
@@ -520,6 +539,17 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         if client.fireball_cooldown > 0
             client.fireball_cooldown -= delta_seconds;
+
+        if client.shout_exhaustion > 0
+        {
+            client.shout_exhaustion -= delta_seconds;
+
+            if client.shout_exhaustion <= 0
+            {
+                client.shout_exhaustion = 0;
+                client.is_shout_exhausted = false;
+            }
+        }
     }
 }
 
