@@ -12,6 +12,7 @@ def max_player_count = 256;
 
 def enable_network_print    = true;
 def network_print_max_level = network_print_level.crucial;
+// def network_print_max_level = network_print_level.count;
 
 enum network_print_level
 {

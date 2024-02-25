@@ -399,7 +399,12 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         var do_update_player = game.do_update_tick_count[player_entity_index];
 
-        var movement = player.movement * prediction_movement_scale;
+        // ignore movement if it did not cause a change in position
+        // so we can send the exact position, instead of a prediction
+        var movement vec2;
+        if do_update_player > 1
+            movement = player.movement * prediction_movement_scale;
+
         var position = player.position;
 
         // HACK:
@@ -450,7 +455,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 var entity = player deref;
 
                 // predict future position on other depending on latency
-                entity.position += movement * ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0);
+                var predicted_movement = movement * ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0);
+                entity.position += predicted_movement;
+
+                // network_print("player % update %, movement:% (%)\n", player_network_id, do_update_player, predicted_movement, player.movement);
 
                 var message network_message_union;
                 message.tag = network_message_tag.update_entity;

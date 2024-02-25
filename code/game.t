@@ -260,19 +260,19 @@ func update(game game_state ref, delta_seconds f32)
 
         // simple world bounds
         {
-            var position = entity.position + entity.collider.center;
+            var collider_position = entity.position + entity.collider.center;
             var radius = entity.collider.radius;
-            if position.x - radius < 0
-                position.x = radius;
-            else if position.x + radius > game_world_size.x
-                position.x = game_world_size.x - radius;
+            if collider_position.x - radius < 0
+                collider_position.x = radius;
+            else if collider_position.x + radius > game_world_size.x
+                collider_position.x = game_world_size.x - radius;
 
-            if position.y - radius < 0
-                position.y = radius;
-            else if position.y + radius > game_world_size.y
-                position.y = game_world_size.y - radius;
+            if collider_position.y - radius < 0
+                collider_position.y = radius;
+            else if collider_position.y + radius > game_world_size.y
+                collider_position.y = game_world_size.y - radius;
 
-            entity.position = position - entity.collider.center;
+            entity.position = collider_position - entity.collider.center;
         }
 
         // update next two ticks if entity moved

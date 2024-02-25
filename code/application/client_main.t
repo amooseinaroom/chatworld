@@ -371,10 +371,15 @@ func game_update program_update_type
 
                 client.local_player_position += movement;
 
-                // client.local_player_position = lerp(client.local_player_position, entity.position, 0.5);
-
                 // smooth local postion to network position
-                client.local_player_position = apply_spring(client.local_player_position, entity.position, 2000, platform.delta_seconds);
+
+                var delta_position = entity.position - client.local_player_position;
+                if squared_length(delta_position) > 1
+                    client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 500, platform.delta_seconds);
+                else
+                    client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
+
+                    // client.local_player_position = lerp(client.local_player_position, entity.position, 0.5);
 
                 // override player entity position
                 client.network_player_position = entity.position;
@@ -395,7 +400,7 @@ func game_update program_update_type
                 else if position.y < (target_camera_position.y - (tiles_per_height * 0.5) + tile_frame - 1)
                     target_camera_position.y = position.y + (tiles_per_height * 0.5) - tile_frame + 1;
 
-                game.camera_position = apply_spring(game.camera_position, target_camera_position, 1000, platform.delta_seconds);
+                game.camera_position = apply_spring_without_overshoot(game.camera_position, target_camera_position, 1000, platform.delta_seconds);
             }
 
             // update(game, platform.delta_seconds);
@@ -515,7 +520,7 @@ func game_update program_update_type
 
                 var player = client.players[0];
                 var entity = get(game, player.entity_id);
-                var position = entity.position;
+                var position = client.network_player_position;
 
                 var body_color = player.body_color;
                 body_color.r = 255 - body_color.r;
