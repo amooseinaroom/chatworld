@@ -101,3 +101,44 @@ func get_chat_message_colors(text network_message_chat_text, alpha f32) (text_co
     else
         return apply_alpha(chat_text_color_idle, alpha), apply_alpha(chat_box_color_idle, alpha);
 }
+
+func skip_space(iterator string ref)
+{
+    try_skip_set(iterator, " \t\n\r");
+}
+
+func skip_name(iterator string ref) (name string)
+{
+    var name_blacklist = " \t\n\r\\\"\'+-*/.,:;~{}[]()<>|&!?=^°%";
+    var name = try_skip_until_set(iterator, name_blacklist, false);
+    return name;
+}
+
+func get_line_number(token string, text string) (line u32)
+{
+    assert((text.base <= token.base) and ((token.base + token.count) <= (text.base + text.count)));
+
+    var line u32 = 1;
+    var iterator = text;
+    while iterator.base < token.base
+    {
+        if try_skip(iterator ref, "\n")
+            line += 1;
+        else
+            advance(iterator ref);
+    }
+
+    return line;
+}
+
+func bit32(index u32) (mask u32)
+{
+    assert(index < 32);
+    return 1 bit_shift_left index;
+}
+
+func bit64(index u64) (mask u64)
+{
+    assert(index < 64);
+    return 1 bit_shift_left index;
+}

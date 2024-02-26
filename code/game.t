@@ -44,9 +44,11 @@ type game_entity_id union
 
 struct game_entity
 {
-    tag      game_entity_tag;
-    position vec2;
-    movement vec2;
+    tag game_entity_tag;
+
+    position   vec2;
+    movement   vec2;
+    push_force vec2;
     collider sphere2;
 
     expand tags union

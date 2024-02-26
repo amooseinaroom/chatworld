@@ -279,18 +279,6 @@ func load_server_address(platform platform_api ref, network platform_network ref
     return address;
 }
 
-func skip_space(iterator string ref)
-{
-    try_skip_set(iterator, " \t\n\r");
-}
-
-func skip_name(iterator string ref) (name string)
-{
-    var name_blacklist = " \t\n\r\\\"\'+-*/.,:;~{}[]()<>|&!?=^°%";
-    var name = try_skip_until_set(iterator, name_blacklist, false);
-    return name;
-}
-
 func network_assert assert_type
 {
     assert(condition_text, condition, location, format, arguments);

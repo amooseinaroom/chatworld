@@ -11,6 +11,14 @@ struct program_state
 
     network platform_network;
 
+    error_message_buffer u8[4096];
+    error_messages string_builder;
+
+    key_bindings game_key_bindings;
+    key_bindings_write_timestamp u64;
+
+    input game_input;
+
     is_host b8;
 
     server game_server;
@@ -34,11 +42,243 @@ enum color_edit_tag
     body_color;
 }
 
+struct game_key_bindings
+{
+    up    u8;
+    down  u8;
+    left  u8;
+    right u8;
+
+    interact u8;
+    attack   u8;
+
+    chat         u8;
+    toggle_shout u8;
+
+    accept u8;
+    cancel u8;
+}
+
+struct game_input
+{
+    up    platform_button;
+    down  platform_button;
+    left  platform_button;
+    right platform_button;
+
+    interact platform_button;
+    attack   platform_button;
+
+    chat         platform_button;
+    toggle_shout platform_button;
+
+    accept platform_button;
+    cancel platform_button;
+}
+
+func update(platform platform_api ref, input game_input ref, key_bindings game_key_bindings)
+{
+    var buttons = input cast(platform_button ref);
+    var keys    = key_bindings ref cast(u8 ref);
+    var button_count = (type_byte_count(game_input) / type_byte_count(platform_button)) cast(u32);
+    var key_count    = (type_byte_count(game_key_bindings) / type_byte_count(u8)) cast(u32);
+    assert(button_count is key_count);
+
+    loop var i u32; button_count
+        platform_button_poll(buttons + i, platform_key_is_active(platform, (keys + i) deref));
+}
+
+def game_key_bindings_path = "key_bindings.txt";
+
+func load_key_bindings(platform platform_api ref, tmemory memory_arena ref) (key_bindings game_key_bindings, error_message string)
+{
+    var result game_key_bindings;
+    result.up       = "W"[0];
+    result.down     = "S"[0];
+    result.left     = "A"[0];
+    result.right    = "D"[0];
+    result.interact = "J"[0];
+    result.attack   = "K"[0];
+    result.chat     = platform_key.enter;
+    result.toggle_shout = "S"[0];
+    result.accept   = "J"[0];
+    result.cancel   = "K"[0];
+
+    var result_base = result ref cast(u8 ref);
+    var type = get_type_info(game_key_bindings);
+    var used_field_mask u64;
+
+    var text string = try_platform_read_entire_file(platform, tmemory, game_key_bindings_path).data;
+
+    var iterator = text;
+    skip_space(iterator ref);
+
+    while iterator.count
+    {
+        // skip comment
+        if try_skip(iterator ref, "#")
+        {
+            try_skip_until_set(iterator ref, "\n");
+            skip_space(iterator ref);
+            continue;
+        }
+
+        var name = skip_name(iterator ref);
+        if not name.count
+        {
+            var error_message = allocate_text(tmemory, "Error: %,% expected field name.", game_key_bindings_path, get_line_number(iterator, text));
+            return result, error_message;
+        }
+        skip_space(iterator ref);
+
+        var field u8 ref;
+        {
+            var info = get_field_byte_offset(type, name);
+            if not info.ok
+            {
+                var error_message string;
+
+                write(tmemory, error_message ref, "Error: %,% there is no field '%'.\n", game_key_bindings_path, get_line_number(iterator, text), name);
+                write(tmemory, error_message ref, "The Following fields are available:\n");
+
+                var compound_type = type.compound_type deref;
+                loop var field_index usize; compound_type.fields.count
+                {
+                    write(tmemory, error_message ref, "  - Field: %\n", compound_type.fields[field_index].name);
+                }
+
+                return result, error_message;
+            }
+
+            if used_field_mask bit_and bit64(info.field_index)
+            {
+                var error_message = allocate_text(tmemory, "Error: %,% field % is set multiple times.", game_key_bindings_path, get_line_number(iterator, text), name);
+                return result, error_message;
+            }
+
+            used_field_mask bit_or= bit64(info.field_index);
+            field = (result_base + info.byte_offset) cast(u8 ref);
+        }
+
+        if not try_skip(iterator ref, ":")
+        {
+            var error_message = allocate_text(tmemory, "Error: %,% expected ':' after name %.", game_key_bindings_path, get_line_number(iterator, text), name);
+            return result, error_message;
+        }
+        skip_space(iterator ref);
+
+        var token = try_skip_until_set(iterator ref, " \t\n\r");
+        if not token.count
+        {
+            var error_message = allocate_text(tmemory, "Error: %,% expected field value after ':'.", game_key_bindings_path, get_line_number(iterator, text));
+            return result, error_message;
+        }
+        skip_space(iterator ref);
+
+        var found_value = false;
+        var value u8;
+
+        // check if it is a special key
+        {
+            var enumeration_type = get_type_info(platform_key).enumeration_type deref;
+            loop var item_index usize; enumeration_type.items.count
+            {
+                if enumeration_type.items[item_index].name is token
+                {
+                    value = enumeration_type.items[item_index].value cast(u8);
+                    found_value = true;
+                    break;
+                }
+            }
+        }
+
+        if not found_value
+        {
+            if token.count > 1
+            {
+                var error_message string;
+
+                write(tmemory, error_message ref, "Error: %,% unknown key name '%' for field %.\n", game_key_bindings_path, get_line_number(iterator, text), token, name);
+                write(tmemory, error_message ref, "Following key names are available:\n");
+
+                write(tmemory, error_message ref, "  - A Single symbol to indicate a keyboard key (e.g. W)\n");
+
+                var enumeration_type = get_type_info(platform_key).enumeration_type deref;
+                loop var item_index usize; enumeration_type.items.count
+                {
+                    write(tmemory, error_message ref, "  - Keyboard key: %\n", enumeration_type.items[item_index].name);
+                }
+
+                return result, error_message;
+            }
+
+            value = token[0];
+        }
+
+        field deref = value;
+    }
+
+    return result, "OK: keybindings.txt successfully loaded.";
+}
+
+func save_key_bindings(platform platform_api ref, key_bindings game_key_bindings, tmemory memory_arena ref)
+{
+    var temp_frame = temporary_begin(tmemory);
+
+    var output string;
+
+    write(tmemory, output ref, "# set key bindings like so:\n");
+
+    write(tmemory, output ref, "# name: value\n\n");
+
+    write(tmemory, output ref, "# toggle_shout is always combinded with ctrl and only avaible while chatting\n");
+    write(tmemory, output ref, "# while chatting, you send and confirm the message with enter, while shift+enter goes to the next line\n");
+
+    write(tmemory, output ref, "\n");
+
+    var compound_type = get_type_info(game_key_bindings).compound_type deref;
+
+    var enumeration_type = get_type_info(platform_key).enumeration_type deref;
+
+    var base = key_bindings ref cast(u8 ref);
+
+    loop var field_index usize; compound_type.fields.count
+    {
+        write(tmemory, output ref, "%: ", compound_type.fields[field_index].name);
+
+        var value = base deref;
+        base += 1;
+
+        var found = false;
+        loop var item_index usize; enumeration_type.items.count
+        {
+            if enumeration_type.items[item_index].value is value
+            {
+                write(tmemory, output ref, "%\n", enumeration_type.items[item_index].name);
+                found = true;
+                break;
+            }
+        }
+
+        if not found
+        {
+            var token = { 1, value ref } string;
+            write(tmemory, output ref, "%\n", token);
+        }
+    }
+
+    platform_write_entire_file(platform, game_key_bindings_path, output);
+
+    temporary_end(tmemory, temp_frame);
+}
+
 func game_init program_init_type
 {
     state.letterbox_width_over_heigth = 16.0 / 9.0;
 
     platform_network_init(state.network ref);
+
+    state.error_messages = string_builder_from_buffer(state.error_message_buffer);
 
     var client = state.client ref;
     client.server_address.port = default_server_port;
@@ -99,6 +339,28 @@ func game_update program_update_type
 
     var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
 
+    // try reloading key_bindings
+    {
+        var info = platform_get_file_info(platform, game_key_bindings_path);
+        if info.ok and (info.write_timestamp is_not state.key_bindings_write_timestamp)
+        {
+            state.key_bindings_write_timestamp = info.write_timestamp;
+            var result = load_key_bindings(platform, state.temporary_memory ref);
+            state.key_bindings = result.key_bindings;
+            if result.error_message.count
+            {
+                // reset error_messages if we don't have enough space
+                if result.error_message.count > (state.error_messages.capacity - state.error_messages.text.count)
+                    state.error_messages.text.count = 0;
+
+                write(state.error_messages ref, "%\n", result.error_message);
+            }
+        }
+    }
+
+    update(platform, state.input ref, state.key_bindings);
+    var input = state.input;
+
     // reload and cycle font
 
     // for testing purposes we want to view different fonts
@@ -143,6 +405,9 @@ func game_update program_update_type
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
     print(ui, 10, font, cursor ref, "version: %, fps: %, latency: %ms\n", game_version, 1.0 / platform.delta_seconds, client.latency_milliseconds);
+
+    if state.error_messages.text.count
+        print(ui, 10, font, cursor ref, "Errors:\n%", state.error_messages.text);
 
     if enable_font_cycling
         print(ui, 10, font, cursor ref, "font: % [%]\n", font_paths[font_index], font_index);
@@ -271,13 +536,14 @@ func game_update program_update_type
 
         // display in-game character
         {
-            var position = v2(cursor.position) - [ 0,  tile_size ] vec2;
+            var position = v2(cursor.position) + floor([ tile_size * 0.5, tile_size * -1.25 ] vec2);
+            position *= (1 / tile_size);
             var sprite_texture_box box2;
             sprite_texture_box.min = [ 0, 0 ] vec2;
             sprite_texture_box.max = [ 128, 128 ] vec2;
 
-            var box = draw_player(ui, position, tile_size, tile_offset, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
-            draw_player_name(ui, font, position, tile_size, tile_offset, to_string(client.user_name), to_rgba8(client.name_color.color));
+            var box = draw_player(ui, position, tile_size, {} vec2, to_rgba8(client.body_color.color), state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+            draw_player_name(ui, font, position, tile_size, {} vec2, to_string(client.user_name), to_rgba8(client.name_color.color));
 
             cursor.position.y = box.min.y cast(s32);
             advance_line(font.info, cursor ref);
@@ -332,11 +598,11 @@ func game_update program_update_type
 
                 edit_string_end(client.chat_message_edit, client.chat_message.text ref);
 
-                client.chat_message.is_shouting xor= platform_key_is_active(platform, platform_key.control) and platform_key_was_pressed(platform, "S"[0]);
+                client.chat_message.is_shouting xor= platform_key_is_active(platform, platform_key.control) and platform_button_was_pressed(input.toggle_shout);
 
                 if not platform_key_is_active(platform, platform_key.control) and not platform_key_is_active(platform, platform_key.alt) and not platform_key_is_active(platform, platform_key.shift) and platform_key_was_pressed(platform, platform_key.enter)
                 {
-                    client.send_chat_message = true;
+                    client.send_chat_message = client.chat_message.text.count > 0;
                     client.chat_message = client.chat_message;
                     client.is_chatting = false;
                 }
@@ -346,7 +612,7 @@ func game_update program_update_type
                 if platform_key_is_active(platform, platform_key.alt) and platform_key_was_pressed(platform, platform_key.f0 + 3)
                     client.do_shutdown_server = true;
 
-                if platform_key_was_pressed(platform, platform_key.enter)
+                if platform_button_was_pressed(input.chat)
                 {
                     client.is_chatting = true;
                     client.chat_message_edit.edit_offset = 0;
@@ -355,10 +621,10 @@ func game_update program_update_type
                 }
 
                 var movement vec2;
-                movement.x = platform_key_is_active(platform, "D"[0]) cast(s32) - platform_key_is_active(platform, "A"[0]) cast(s32);
-                movement.y = platform_key_is_active(platform, "W"[0]) cast(s32) - platform_key_is_active(platform, "S"[0]) cast(s32);
+                movement.x = input.right.is_active cast(s32) - input.left.is_active cast(s32);
+                movement.y = input.up.is_active cast(s32) - input.down.is_active cast(s32);
 
-                var do_attack = platform_key_is_active(platform, "J"[0]);
+                var do_attack = input.attack.is_active;
 
                 movement = normalize_or_zero(movement);
                 movement *= (player_movement_speed * platform.delta_seconds);
@@ -601,6 +867,8 @@ func game_update program_update_type
         save_state.user_password = client.user_password;
 
         platform_write_entire_file(platform, client_save_state_path, value_to_u8_array(save_state));
+
+        save_key_bindings(platform, state.key_bindings, tmemory);
     }
 
     return true;
@@ -658,6 +926,8 @@ func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec
         // flip x if looking right
         var flip_x = (((view_direction + game_sprite_view_direction.count - 1) mod game_sprite_view_direction.count) < 2) is_not 0;
         var alignment = player_draw_alignment;
+
+        position = floor(position * tile_size) + tile_offset;
         draw_texture_box(ui, game_render_layer.entity, 1.0, rgba8_white, sprite_texture, position, sprite_texture_box, alignment, texture_scale, flip_x);
     }
     else
