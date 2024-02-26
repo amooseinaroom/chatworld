@@ -62,8 +62,8 @@ struct game_client
     send_chat_message b8;
     is_chatting       b8;
 
-    entity_id game_entity_id;
-    network_id u32;
+    entity_id         game_entity_id;
+    entity_network_id game_entity_network_id;
 
     heartbeat_timeout f32;
 
@@ -213,7 +213,7 @@ struct game_player
     chat_message_timeout f32;
 
     entity_id         game_entity_id;
-    entity_network_id u32;
+    entity_network_id game_entity_network_id;
 
     sprite_index_plus_one u32;
 }
@@ -272,12 +272,12 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         {
             if client.state is client_state.connecting
             {
-                client.network_id = result.message.login_accept.id;
+                client.entity_network_id = result.message.login_accept.player_entity_network_id;
                 client.state = client_state.online;
 
                 // adding a player here is a bit redundant and needs to be the same as in
                 // add_player message
-                var entity_id = add_player(game, client.network_id);
+                var entity_id = add_player(game, client.entity_network_id);
                 client.player_count = 0;
                 client.is_admin = result.message.login_accept.is_admin;
                 var player = find_player(client, entity_id);
@@ -285,7 +285,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 player.name = client.user_name;
                 player.name_color = to_rgba8(client.name_color.color);
                 player.body_color = to_rgba8(client.body_color.color);
-                player.entity_network_id = client.network_id;
+                player.entity_network_id = client.entity_network_id;
             }
         }
         case network_message_tag.login_reject
@@ -306,9 +306,9 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 var player = find_player(client, entity_id);
                 if player
                 {
-                    player.name       = message.name;
-                    player.name_color = message.name_color;
-                    player.body_color = message.body_color;
+                    player.name              = message.name;
+                    player.name_color        = message.name_color;
+                    player.body_color        = message.body_color;
                     player.entity_network_id = message.entity_network_id;
                 }
                 else
@@ -342,9 +342,9 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
             var message = result.message.update_entity;
 
-            var entity_id = find_network_entity(game, message.id);
+            var entity_id = find_network_entity(game, message.network_id);
             if not entity_id.value
-                entity_id = add(game, message.entity.tag, message.id);
+                entity_id = add(game, message.tag, message.network_id);
 
             var entity = get(game, entity_id);
             entity deref = message.entity;
@@ -356,7 +356,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
             var message = result.message.delete_entity;
 
-            var entity_id = find_network_entity(game, message.id);
+            var entity_id = find_network_entity(game, message.network_id);
             if entity_id.value
                 remove_for_real(game, entity_id);
         }
@@ -367,7 +367,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
             var message = result.message.chat;
 
-            var entity_id = find_network_entity(game, message.id);
+            var entity_id = find_network_entity(game, message.player_entity_network_id);
             assert(entity_id.value);
 
             var player = find_player(client, entity_id);
@@ -514,12 +514,12 @@ func find_player(client game_client ref, entity_id game_entity_id) (player game_
     return client.players[found_index] ref;
 }
 
-func find_network_entity(game game_state ref, network_id u32) (id game_entity_id)
+func find_network_entity(game game_state ref, network_id game_entity_network_id) (entity_id game_entity_id)
 {
     var entity_id game_entity_id;
     loop var i u32; game.entity.count
     {
-        if (not game.active[i]) or (game.network_id[i] is_not network_id)
+        if (game.tag[i] is game_entity_tag.none) or (game.network_id[i] is_not network_id)
             continue;
 
         entity_id.index_plus_one = i + 1;

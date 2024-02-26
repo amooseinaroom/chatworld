@@ -12,7 +12,7 @@ struct game_server
     clients      game_client_connection[max_player_count];
     client_count u32;
 
-    next_network_id u32;
+    next_network_id game_entity_network_id;
 
     latency_timestamp_milliseconds u64;
     latency_timeout                f32;
@@ -31,7 +31,7 @@ struct game_client_connection
     body_color rgba8;
 
     entity_id         game_entity_id;
-    entity_network_id u32;
+    entity_network_id game_entity_network_id;
     user_index    u32;
     do_update  b8;
     is_new     b8;
@@ -87,12 +87,12 @@ func save(platform platform_api ref, server game_server ref)
     platform_write_entire_file(platform, server_user_path, value_to_u8_array(server.users));
 }
 
-func new_network_id(server game_server ref) (id u32)
+func new_network_id(server game_server ref) (id game_entity_network_id)
 {
-    server.next_network_id += 1;
+    server.next_network_id.value += 1;
 
-    if not server.next_network_id
-        server.next_network_id += 1;
+    if not server.next_network_id.value
+        server.next_network_id.value += 1;
 
     return server.next_network_id;
 }
@@ -230,7 +230,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 var message network_message_union;
                 message.tag = network_message_tag.login_accept;
-                message.login_accept.id = client.entity_network_id;
+                message.login_accept.player_entity_network_id = client.entity_network_id;
                 message.login_accept.is_admin = server.users[found_user_index].is_admin;
                 send(network, message, server.socket, client.address);
             }
@@ -371,7 +371,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
     // before update, so entity is not deleted yet
     loop var i u32; game.entity.count
     {
-        if (not game.active[i])
+        if game.tag[i] is game_entity_tag.none
             continue;
 
         if game.do_delete[i]
@@ -382,7 +382,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 var message network_message_union;
                 message.tag = network_message_tag.delete_entity;
-                message.delete_entity.id = game.network_id[i];
+                message.delete_entity.network_id = game.network_id[i];
                 send(network, message, server.socket, client.address);
             }
         }
@@ -463,7 +463,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             {
                 var message network_message_union;
                 message.tag = network_message_tag.chat;
-                message.chat.id = client.entity_network_id;
+                message.chat.player_entity_network_id = client.entity_network_id;
                 message.chat.text = client.chat_message;
                 send(network, message, server.socket, other.address);
             }
@@ -481,26 +481,28 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 var message network_message_union;
                 message.tag = network_message_tag.update_entity;
-                message.update_entity.id     = player_network_id;
-                message.update_entity.entity = entity;
+                message.update_entity.tag        = game_entity_tag.player;
+                message.update_entity.network_id = player_network_id;
+                message.update_entity.entity     = entity;
                 send(network, message, server.socket, other.address);
             }
         }
 
         loop var i u32; game.entity.count
         {
-            if not game.active[i] or not game.do_update_tick_count[i]
+            if (game.tag[i] is game_entity_tag.none) or not game.do_update_tick_count[i]
+                continue;
+
+            if game.tag[i] is game_entity_tag.player
                 continue;
 
             var entity = game.entity[i];
 
-            if entity.tag is game_entity_tag.player
-                continue;
-
             var message network_message_union;
             message.tag = network_message_tag.update_entity;
-            message.update_entity.id     = game.network_id[i];
-            message.update_entity.entity = entity;
+            message.update_entity.network_id = game.network_id[i];
+            message.update_entity.tag        = game.tag[i];
+            message.update_entity.entity     = entity;
             send(network, message, server.socket, client.address);
         }
     }

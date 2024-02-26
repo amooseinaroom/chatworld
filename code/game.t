@@ -17,13 +17,28 @@ struct game_state
 
     freelist     u32[max_entity_count];
     generation   u32[max_entity_count];
-    active       b8[max_entity_count];
-    network_id   u32[max_entity_count];
+    tag          game_entity_tag[max_entity_count];
+    network_id   game_entity_network_id[max_entity_count];
     do_delete    b8[max_entity_count];
     entity       game_entity[max_entity_count];
 
     // server only maybe
     do_update_tick_count u8[max_entity_count];
+}
+
+struct game_entity_network_id
+{
+    value u32;
+}
+
+func is(left game_entity_network_id, right game_entity_network_id) (ok b8)
+{
+    return left.value is right.value;
+}
+
+func is_not(left game_entity_network_id, right game_entity_network_id) (ok b8)
+{
+    return left.value is_not right.value;
 }
 
 // COMPILER BUG: somehow sets the type to u8
@@ -44,8 +59,6 @@ type game_entity_id union
 
 struct game_entity
 {
-    tag game_entity_tag;
-
     position   vec2;
     movement   vec2;
     push_force vec2;
@@ -66,8 +79,9 @@ struct game_entity
     };
 }
 
-enum game_entity_tag
+enum game_entity_tag u8
 {
+    none;
     player;
     fireball;
     chicken;
@@ -83,7 +97,7 @@ func init(game game_state ref, random random_pcg)
     game.random = random;
 }
 
-func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_entity_id)
+func add(game game_state ref, tag game_entity_tag, network_id game_entity_network_id) (id game_entity_id)
 {
     assert(tag < game_entity_tag.count);
 
@@ -95,11 +109,11 @@ func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_enti
 
     game.generation[index] += 1;
     game.entity[index] = {} game_entity;
-    game.entity[index].tag = tag;
     game.network_id[index] = network_id;
 
-    assert(not game.active[index]);
-    game.active[index] = true;
+    assert(game.tag[index] is game_entity_tag.none);
+    game.tag[index] = tag;
+
     game.do_delete[index] = false;
 
     var id game_entity_id;
@@ -108,7 +122,7 @@ func add(game game_state ref, tag game_entity_tag, network_id u32) (id game_enti
     return id;
 }
 
-func add_player(game game_state ref, network_id u32) (id game_entity_id)
+func add_player(game game_state ref, network_id game_entity_network_id) (id game_entity_id)
 {
     var id = add(game, game_entity_tag.player, network_id);
     var entity = get(game, id);
@@ -120,7 +134,7 @@ func add_player(game game_state ref, network_id u32) (id game_entity_id)
     return id;
 }
 
-func add_fireball(game game_state ref, network_id u32, position vec2, movement vec2)
+func add_fireball(game game_state ref, network_id game_entity_network_id, position vec2, movement vec2)
 {
     var id = add(game, game_entity_tag.fireball, network_id);
     var entity = get(game, id);
@@ -130,7 +144,7 @@ func add_fireball(game game_state ref, network_id u32, position vec2, movement v
     entity.fireball.lifetime = 4;
 }
 
-func add_chicken(game game_state ref, network_id u32, position vec2)
+func add_chicken(game game_state ref, network_id game_entity_network_id, position vec2)
 {
     var id = add(game, game_entity_tag.chicken, network_id);
     var entity = get(game, id);
@@ -153,10 +167,10 @@ func remove_for_real(game game_state ref, id game_entity_id)
 
     var index = id.index_plus_one - 1;
 
-    assert(game.active[index]);
-    game.active[index] = false;
+    var tag = game.tag[index];
+    assert(game.tag[index] is_not game_entity_tag.none);
+    game.tag[index] = game_entity_tag.none;
 
-    var tag = game.entity[index].tag;
     assert(game.entity_tag_count[tag]);
     game.entity_tag_count[tag] -= 1;
 
@@ -176,7 +190,7 @@ func get(game game_state ref, id game_entity_id) (entity game_entity ref)
     if game.do_delete[index] or (game.generation[index] is_not id.generation)
         return null;
 
-    assert(game.active[index]);
+    assert(game.tag[index] is_not game_entity_tag.none);
 
     return game.entity[index] ref;
 }
@@ -185,7 +199,7 @@ func update(game game_state ref, delta_seconds f32)
 {
     loop var i u32; game.entity.count
     {
-        if not game.active[i]
+        if game.tag[i] is game_entity_tag.none
             continue;
 
         if game.do_delete[i]
@@ -198,7 +212,7 @@ func update(game game_state ref, delta_seconds f32)
 
         var position = entity.position;
 
-        switch entity.tag
+        switch game.tag[i]
         case game_entity_tag.fireball
         {
             entity.position += entity.movement * delta_seconds;
@@ -281,6 +295,23 @@ func update(game game_state ref, delta_seconds f32)
             game.do_update_tick_count[i] = 2;
         else if game.do_update_tick_count[i]
             game.do_update_tick_count[i] -= 1;
+    }
+
+    var fireball_collision_mask = bit_not (bit64(game_entity_tag.none) bit_or bit64(game_entity_tag.fireball));
+    loop var fireball_index u32; game.entity.count
+    {
+        if game.tag[fireball_index] is_not game_entity_tag.fireball
+            continue;
+
+        var fireball = game.entity[fireball_index] ref;
+
+        loop var other_index u32; game.entity.count
+        {
+            if not (bit64(game.tag[other_index]) bit_and fireball_collision_mask)
+                continue;
+
+            var other = game.entity[other_index] ref;
+        }
     }
 }
 

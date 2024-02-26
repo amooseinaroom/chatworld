@@ -825,12 +825,12 @@ func game_update program_update_type
 
             loop var i u32; game.entity.count
             {
-                if not game.active[i]
+                if game.tag[i] is game_entity_tag.none
                     continue;
 
                 var entity = game.entity[i] ref;
 
-                switch entity.tag
+                switch game.tag[i]
                 case game_entity_tag.fireball
                 {
                     var box box2;

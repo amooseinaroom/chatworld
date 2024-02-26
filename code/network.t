@@ -72,7 +72,7 @@ struct network_message_login_accept
 {
     expand base network_message_base;
 
-    id u32;
+    player_entity_network_id game_entity_network_id;
 
     is_admin b8;
 }
@@ -124,28 +124,30 @@ struct network_message_add_player
     name_color        rgba8;
     body_color        rgba8;
 
-    entity_network_id u32;
+    entity_network_id game_entity_network_id;
 }
 
 struct network_message_remove_player
 {
     expand base network_message_base;
-    entity_network_id u32;
+
+    entity_network_id game_entity_network_id;
 }
 
 struct network_message_update_entity
 {
     expand base network_message_base;
 
-    id     u32;
-    entity game_entity;
+    entity     game_entity;
+    network_id game_entity_network_id;
+    tag        game_entity_tag;
 }
 
 struct network_message_delete_entity
 {
     expand base network_message_base;
 
-    id     u32;
+    network_id game_entity_network_id;
 }
 
 struct network_message_chat_text
@@ -158,7 +160,7 @@ struct network_message_chat
 {
     expand base network_message_base;
 
-    id u32;
+    player_entity_network_id game_entity_network_id;
 
     text network_message_chat_text;
 }
