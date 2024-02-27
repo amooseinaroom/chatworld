@@ -167,22 +167,25 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     break check_reject;
                 }
 
-                loop var i u32; server.users.user_count
+                if client and (server.users[client.user_index].name is message.name) and (server.users[client.user_index].password is message.password)
                 {
-                    if server.users[i].name is message.name
+                    found_user_index = client.user_index;
+                    break check_reject;
+                }
+
+                loop var user_index u32; server.users.user_count
+                {
+                    if server.users[user_index].name is message.name
                     {
-                        if server.users[i].password is_not message.password
+                        if server.users[user_index].password is_not message.password
                         {
                             reject_reason = network_message_reject_reason.credential_missmatch;
                             break check_reject;
                         }
 
-                        if client and (client.user_index is i)
-                            break check_reject;
-
                         loop var client_index u32; server.client_count
                         {
-                            if server.clients[client_index].user_index is i
+                            if server.clients[client_index].user_index is user_index
                             {
                                 network_print_info("Server: rejected player, user is already logged in! % %\n", to_string(message.name), result.address);
                                 reject_reason = network_message_reject_reason.duplicated_user_login;
@@ -190,7 +193,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                             }
                         }
 
-                        found_user_index = i;
+                        found_user_index = user_index;
                         break;
                     }
                 }

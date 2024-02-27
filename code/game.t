@@ -117,6 +117,9 @@ func init(game game_state ref, random random_pcg)
 
 func add(game game_state ref, tag game_entity_tag, network_id game_entity_network_id) (id game_entity_id)
 {
+    loop var i u32; game.network_id.count
+        assert(game.network_id[i] is_not network_id);
+
     assert(tag < game_entity_tag.count);
 
     assert(game.entity_count < game.entity.count);
