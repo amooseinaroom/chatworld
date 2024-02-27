@@ -1,4 +1,7 @@
 
+def max_user_knockdown_time = 10 * 60.0; // 10 minutes
+// def max_user_knockdown_time = 30.0; // 30 sec
+
 struct game_server
 {
     game game_state;
@@ -7,7 +10,7 @@ struct game_server
 
     socket platform_network_socket;
 
-    users game_user_buffer;
+    users game_user_buffer_extended;
 
     clients      game_client_connection[max_player_count];
     client_count u32;
@@ -42,12 +45,8 @@ struct game_client_connection
     heartbeat_timeout      f32;
     missed_heartbeat_count u32;
 
-    fireball_cooldown f32;
-
     chat_message           network_message_chat_text;
     broadcast_chat_message b8;
-    shout_exhaustion       f32;
-    is_shout_exhausted     b8;
 }
 
 struct game_user
@@ -57,10 +56,30 @@ struct game_user
     is_admin b8;
 }
 
+// active user data that does not need to be stored
+struct game_user_extended
+{
+    knockdown_timeout f32;
+    is_knockdowned    b8;
+
+    shout_exhaustion   f32;
+    is_shout_exhausted b8;
+
+    fireball_cooldown f32;
+}
+
+def max_server_user_count = 1 cast(u32) bit_shift_left 14;
+
 struct game_user_buffer
 {
            user_count  u32;
-    expand base        game_user[1 bit_shift_left 14];
+    expand base        game_user[max_server_user_count];
+}
+
+struct game_user_buffer_extended
+{
+    expand base           game_user_buffer;
+           extended_users game_user_extended[max_server_user_count];
 }
 
 def server_user_path = "server_users.bin";
@@ -76,15 +95,17 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
     {
         var data = result.data;
         if data.count is type_byte_count(game_user_buffer)
-            copy_bytes(server.users ref, data.base, data.count);
+            copy_bytes(server.users.base ref, data.base, data.count);
     }
 
     init(server.game ref, platform_get_random_from_time(platform));
+
+    add_healing_altar(server.game ref, new_network_id(server), [ 3.5, 3.5 ] vec2);
 }
 
 func save(platform platform_api ref, server game_server ref)
 {
-    platform_write_entire_file(platform, server_user_path, value_to_u8_array(server.users));
+    platform_write_entire_file(platform, server_user_path, value_to_u8_array(server.users.base));
 }
 
 func new_network_id(server game_server ref) (id game_entity_network_id)
@@ -239,18 +260,77 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         {
             var entity = get(game, client.entity_id);
             network_assert(entity);
+
+            // ignore input from knockdowned players
+            if entity.health is 0
+                break;
+
+            var drag_child = get(game, entity.drag_child_id);
+            if drag_child
+                result.message.user_input.movement *= 0.5;
+
             entity.movement += result.message.user_input.movement;
 
             if result.message.user_input.do_attack
             {
-                if client.fireball_cooldown <= 0
+                var user = server.users.extended_users[client.user_index] ref;
+                if user.fireball_cooldown <= 0
                 {
-                    client.fireball_cooldown = 1;
-                    var movement = normalize_or_zero(result.message.user_input.movement);
-                    if squared_length(movement) is 0
-                        movement = [ 0, 1 ] vec2;
+                    user.fireball_cooldown = 1;
+                    def fireball_speed = 8.0;
 
-                    add_fireball(game, new_network_id(server), entity.position + [ 0, entity.collider.radius ] vec2, movement * 2);
+                    var movement = [ cos(entity.view_direction), -sin(entity.view_direction) ] vec2;
+
+                    add_fireball(game, new_network_id(server), entity.position + [ 0, entity.collider.radius ] vec2, movement * fireball_speed, client.entity_id);
+                }
+            }
+            else if result.message.user_input.do_interact
+            {
+                var drag_child = get(game, entity.drag_child_id);
+                if drag_child
+                {
+                    drag_child.drag_parent_id = {} game_entity_id;
+                    entity.drag_child_id = {} game_entity_id;
+                }
+                else
+                {
+                    var closest_player_distance_squared = 100.0; // some big range
+                    var closest_player_index = u32_invalid_index;
+
+                    var entity_index = client.entity_id.index_plus_one - 1;
+
+                    var position = entity.position + entity.collider.center;
+                    var radius   = entity.collider.radius * 0.5; // we want to overlap other by half our radius
+
+                    loop var i u32; game.entity.count
+                    {
+                        if (game.tag[i] is_not game_entity_tag.player) or (i is entity_index)
+                            continue;
+
+                        var other = game.entity[i] ref;
+                        if other.health is 0
+                        {
+                            var drag_parent = get(game, other.drag_parent_id);
+                            if not drag_parent
+                            {
+                                var other_position = other.position + other.collider.center;
+                                var max_grab_distance = radius + other.collider.radius;
+                                var distance_squared = squared_length(other.position - entity.position);
+                                if (distance_squared < (max_grab_distance * max_grab_distance)) and ( distance_squared < closest_player_distance_squared)
+                                {
+                                    closest_player_distance_squared = distance_squared;
+                                    closest_player_index = i;
+                                }
+                            }
+                        }
+                    }
+
+                    if closest_player_index is_not u32_invalid_index
+                    {
+                        var other = game.entity[closest_player_index] ref;
+                        other.drag_parent_id = client.entity_id;
+                        entity.drag_child_id = { closest_player_index + 1, game.generation[closest_player_index] } game_entity_id;
+                    }
                 }
             }
 
@@ -274,9 +354,14 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
         case network_message_tag.chat
         {
+            var entity = get(game, client.entity_id);
+            network_assert(entity);
+
             client.broadcast_chat_message = true;
 
-            if client.is_shout_exhausted
+            var user = server.users.extended_users[client.user_index];
+
+            if user.is_shout_exhausted or (user.knockdown_timeout > 0)
             {
                 client.chat_message.text = to_string255("...");
                 client.chat_message.is_shouting = false;
@@ -288,10 +373,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
             if client.chat_message.is_shouting
             {
-                client.shout_exhaustion += 5.0;
+                user.shout_exhaustion += 5.0;
 
-                if client.shout_exhaustion > 30
-                    client.is_shout_exhausted = true;
+                if user.shout_exhaustion > 30
+                    user.is_shout_exhausted = true;
             }
         }
         case network_message_tag.admin_server_shutdown
@@ -376,13 +461,13 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         if game.do_delete[i]
         {
+            var message network_message_union;
+            message.tag = network_message_tag.delete_entity;
+            message.delete_entity.network_id = game.network_id[i];
+
             loop var a u32; server.client_count
             {
                 var client = server.clients[a] ref;
-
-                var message network_message_union;
-                message.tag = network_message_tag.delete_entity;
-                message.delete_entity.network_id = game.network_id[i];
                 send(network, message, server.socket, client.address);
             }
         }
@@ -490,10 +575,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
         loop var i u32; game.entity.count
         {
-            if (game.tag[i] is game_entity_tag.none) or not game.do_update_tick_count[i]
+            if (game.tag[i] is game_entity_tag.none) or (not client.is_new and not game.do_update_tick_count[i])
                 continue;
 
-            if game.tag[i] is game_entity_tag.player
+            if not client.is_new and (game.tag[i] is game_entity_tag.player)
                 continue;
 
             var entity = game.entity[i];
@@ -532,6 +617,28 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
     }
 
+    loop var user_index u32; server.users.count cast(u32)
+    {
+        var user = server.users.extended_users[user_index] ref;
+
+        if user.fireball_cooldown > 0
+            user.fireball_cooldown -= delta_seconds;
+
+        if user.knockdown_timeout > 0
+            user.knockdown_timeout -= delta_seconds;
+
+        if user.shout_exhaustion > 0
+        {
+            user.shout_exhaustion -= delta_seconds;
+
+            if user.shout_exhaustion <= 0
+            {
+                user.shout_exhaustion = 0;
+                user.is_shout_exhausted = false;
+            }
+        }
+    }
+
     loop var a u32; server.client_count
     {
         var client = server.clients[a] ref;
@@ -539,17 +646,40 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         client.broadcast_chat_message = false;
         client.is_new = false;
 
-        if client.fireball_cooldown > 0
-            client.fireball_cooldown -= delta_seconds;
+        var entity = get(game, client.entity_id);
+        network_assert(entity);
 
-        if client.shout_exhaustion > 0
+        var entity_index = client.entity_id.index_plus_one - 1;
+
+        var user = server.users.extended_users[client.user_index] ref;
+
+        if user.is_knockdowned
         {
-            client.shout_exhaustion -= delta_seconds;
-
-            if client.shout_exhaustion <= 0
+            if (user.knockdown_timeout <= 0) or entity.health
             {
-                client.shout_exhaustion = 0;
-                client.is_shout_exhausted = false;
+                // healed by waiting out the timer
+                if user.knockdown_timeout <= 0
+                    entity.health = maximum(1, entity.max_health / 5);
+
+                user.knockdown_timeout = 0;
+                user.is_knockdowned = false;
+
+                // stop being dragged
+                var drag_parent = get(game, entity.drag_parent_id);
+                if drag_parent
+                    drag_parent.drag_child_id = {} game_entity_id;
+                entity.drag_parent_id = {} game_entity_id;
+
+                game.do_update_tick_count[entity_index] = 2;
+            }
+        }
+        else
+        {
+            if not entity.health
+            {
+                user.knockdown_timeout = max_user_knockdown_time;
+                user.is_knockdowned = true;
+                game.do_update_tick_count[entity_index] = 2;
             }
         }
     }

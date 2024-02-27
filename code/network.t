@@ -112,8 +112,9 @@ struct network_message_user_input
 {
     expand base network_message_base;
 
-    movement  vec2;
-    do_attack b8;
+    movement    vec2;
+    do_attack   b8;
+    do_interact b8;
 }
 
 struct network_message_add_player

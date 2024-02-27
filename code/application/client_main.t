@@ -5,6 +5,8 @@ override def use_render_system = true;
 
 def game_title = "chatworld client";
 
+// override def network_print_max_level = network_print_level.count;
+
 struct program_state
 {
     expand default default_program_state;
@@ -624,27 +626,33 @@ func game_update program_update_type
                 movement.x = input.right.is_active cast(s32) - input.left.is_active cast(s32);
                 movement.y = input.up.is_active cast(s32) - input.down.is_active cast(s32);
 
-                var do_attack = input.attack.is_active;
-
                 movement = normalize_or_zero(movement);
                 movement *= (player_movement_speed * platform.delta_seconds);
 
                 var entity = get(game, player.entity_id);
 
-                client.frame_input.movement += movement;
-                client.frame_input.do_attack or= do_attack;
+                if entity.health
+                {
+                    client.frame_input.movement += movement;
+                    client.frame_input.do_attack or= input.attack.is_active;
+                    client.frame_input.do_interact or= platform_button_was_pressed(input.interact);
 
-                client.local_player_position += movement;
+                    client.local_player_position += movement;
 
-                // smooth local postion to network position
+                    // smooth local postion to network position
 
-                var delta_position = entity.position - client.local_player_position;
-                if squared_length(delta_position) > 1
-                    client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 500, platform.delta_seconds);
+                    var delta_position = entity.position - client.local_player_position;
+                    if squared_length(delta_position) > 1
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 500, platform.delta_seconds);
+                    else
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
+
+                        // client.local_player_position = lerp(client.local_player_position, entity.position, 0.5);
+                }
                 else
-                    client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
-
-                    // client.local_player_position = lerp(client.local_player_position, entity.position, 0.5);
+                {
+                    client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 500, platform.delta_seconds);
+                }
 
                 // override player entity position
                 client.network_player_position = entity.position;
@@ -700,7 +708,7 @@ func game_update program_update_type
                 sprite_texture_box.min = [ 0, 0 ] vec2;
                 sprite_texture_box.max = [ 128, 128 ] vec2;
 
-                var box = draw_player(ui, position, tile_size, tile_offset, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
+                var player_box = draw_player(ui, position, tile_size, tile_offset, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction, entity.health is 0);
                 draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), player.name_color);
 
                 if player.chat_message_timeout > 0
@@ -711,7 +719,7 @@ func game_update program_update_type
 
                     def shout_distance = tiles_per_width * 3;
 
-                    var text_position = get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.5 ] vec2;
+                    var text_position = get_point(player_box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.5 ] vec2;
                     var text_alignment = [ 0.5, 0 ] vec2;
 
                     if is_contained(text_position, chat_message_frame)
@@ -740,7 +748,7 @@ func game_update program_update_type
 
                 if (i is 0) and client.is_chatting
                 {
-                    var aligned_state = draw_aligned_begin(ui, get_point(box, [ 0.5, 0 ] vec2) - [ 0, tile_size * 0.2 ] vec2, [ 0.5, 1 ] vec2);
+                    var aligned_state = draw_aligned_begin(ui, get_point(player_box, [ 0.5, 0 ] vec2) - [ 0, tile_size * 0.2 ] vec2, [ 0.5, 1 ] vec2);
 
                     // var t = pow(player.chat_message_timeout, 0.25);
                     var alpha = 1.0;
@@ -837,15 +845,29 @@ func game_update program_update_type
                     box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
                     box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
                     var color = [ 255, 128, 25, 255 ] rgba8;
-                    draw_box(ui, 2, color, box);
+                    draw_box(ui, game_render_layer.overlay, color, box);
                 }
                 case game_entity_tag.chicken
                 {
                     var box box2;
                     box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
                     box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-                    var color = [ 240, 240, 240, 255 ] rgba8;
-                    draw_box(ui, 2, color, box);
+
+                    var alpha = 255 cast(u8);
+                    if entity.health <= 0
+                        alpha = (clamp(entity.corpse_lifetime / max_corpse_lifetime, 0, 1) * 255) cast(u8);
+
+                    var color = [ 240, 240, 240, alpha ] rgba8;
+                    draw_box(ui, game_render_layer.entity, color, box);
+                }
+                case game_entity_tag.healing_altar
+                {
+                    var box box2;
+                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
+
+                    var color = [ 50, 255, 50, 255 ] rgba8;
+                    draw_box(ui, game_render_layer.ground_overlay, color, box);
                 }
             }
 
@@ -896,6 +918,7 @@ func get_player_box(position vec2, tile_size f32, tile_offset vec2) (box box2)
 enum game_render_layer
 {
     ground;
+    ground_overlay;
     entity;
     overlay;
 }
@@ -906,7 +929,7 @@ func draw_player_name(ui ui_system ref, font ui_font, position vec2, tile_size f
     print_aligned(ui, game_render_layer.overlay, name_color, font, get_point(box, [ 0.5, 1 ] vec2) + [ 0, tile_size * 0.1 ] vec2, [ 0.5, 0 ] vec2, "%", name);
 }
 
-func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec2, body_color rgba8, use_sprite b8, sprite_texture gl_texture, sprite_texture_box box2, view_direction game_sprite_view_direction) (box box2)
+func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec2, body_color rgba8, use_sprite b8, sprite_texture gl_texture, sprite_texture_box box2, view_direction game_sprite_view_direction, is_knockdowned = false) (box box2)
 {
     var box = get_player_box(position, tile_size, tile_offset);
 
@@ -929,6 +952,8 @@ func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec
 
         position = floor(position * tile_size) + tile_offset;
         draw_texture_box(ui, game_render_layer.entity, 1.0, rgba8_white, sprite_texture, position, sprite_texture_box, alignment, texture_scale, flip_x);
+
+        assert(not is_knockdowned);
     }
     else
     {
@@ -939,6 +964,9 @@ func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec
         player_box.min.x = floor((box.max.x + box.min.x) * 0.5 - (size * 0.5));
         player_box.max.x = player_box.min.x + size;
         draw_box(ui, game_render_layer.entity, body_color, player_box);
+
+        if is_knockdowned
+            draw_box(ui, game_render_layer.entity + 1, [ 50, 50, 50, 255 ] rgba8, grow(player_box, -floor(tile_size * 0.2)));
     }
 
     return box;
