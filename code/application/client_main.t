@@ -18,6 +18,7 @@ struct program_state
 
     key_bindings game_key_bindings;
     key_bindings_write_timestamp u64;
+    key_bindings_are_init        b8;
 
     input game_input;
 
@@ -344,9 +345,12 @@ func game_update program_update_type
     // try reloading key_bindings
     {
         var info = platform_get_file_info(platform, game_key_bindings_path);
-        if info.ok and (info.write_timestamp is_not state.key_bindings_write_timestamp)
+        // if no file exist or timestamp changed
+        if not state.key_bindings_are_init or (info.ok and (info.write_timestamp is_not state.key_bindings_write_timestamp))
         {
             state.key_bindings_write_timestamp = info.write_timestamp;
+            state.key_bindings_are_init = true;
+
             var result = load_key_bindings(platform, state.temporary_memory ref);
             state.key_bindings = result.key_bindings;
             if result.error_message.count
