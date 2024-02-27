@@ -49,7 +49,8 @@ day 8:
 * add server shutdown command
 * some login stability
 
-next
+todo:
 
 upload sprites
 harden text messages (acknowledge system)
+show keybindings and other info while holding F1

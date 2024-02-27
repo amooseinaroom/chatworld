@@ -446,21 +446,7 @@ func update(game game_state ref, delta_seconds f32)
         }
 
         // simple world bounds
-        {
-            var collider_position = entity.position + entity.collider.center;
-            var radius = entity.collider.radius;
-            if collider_position.x - radius < 0
-                collider_position.x = radius;
-            else if collider_position.x + radius > game_world_size.x
-                collider_position.x = game_world_size.x - radius;
-
-            if collider_position.y - radius < 0
-                collider_position.y = radius;
-            else if collider_position.y + radius > game_world_size.y
-                collider_position.y = game_world_size.y - radius;
-
-            entity.position = collider_position - entity.collider.center;
-        }
+        check_world_collision(game, entity, delta_seconds);
 
         // update next two ticks if entity moved
         // this way we send the predicted position and one final rest idle position
@@ -509,6 +495,25 @@ func update(game game_state ref, delta_seconds f32)
         game.do_delete[fireball_index] or= did_collide;
     }
 }
+
+
+func check_world_collision(game game_state ref, entity game_entity ref, delta_seconds f32)
+{
+    var collider_position = entity.position + entity.collider.center;
+    var radius = entity.collider.radius;
+    if collider_position.x - radius < 0
+        collider_position.x = radius;
+    else if collider_position.x + radius > game_world_size.x
+        collider_position.x = game_world_size.x - radius;
+
+    if collider_position.y - radius < 0
+        collider_position.y = radius;
+    else if collider_position.y + radius > game_world_size.y
+        collider_position.y = game_world_size.y - radius;
+
+    entity.position = collider_position - entity.collider.center;
+}
+
 
 func update_game_version(platform platform_api ref, tmemory memory_arena ref)
 {

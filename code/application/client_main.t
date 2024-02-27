@@ -240,7 +240,6 @@ func save_key_bindings(platform platform_api ref, key_bindings game_key_bindings
     write(tmemory, output ref, "\n");
 
     var compound_type = get_type_info(game_key_bindings).compound_type deref;
-
     var enumeration_type = get_type_info(platform_key).enumeration_type deref;
 
     var base = key_bindings ref cast(u8 ref);
@@ -411,9 +410,47 @@ func game_update program_update_type
 
     var cursor = cursor_below_position(font.info, 20, ui.viewport_size.height - 20);
     print(ui, 10, font, cursor ref, "version: %, fps: %, latency: %ms\n", game_version, 1.0 / platform.delta_seconds, client.latency_milliseconds);
+    print(ui, 10, font, cursor ref, "hold F1 for info\n\n");
 
-    if state.error_messages.text.count
-        print(ui, 10, font, cursor ref, "Errors:\n%", state.error_messages.text);
+    if platform_key_is_active(platform, platform_key.f0 + 1)
+    {
+        // key bindings
+        {
+            var base = state.key_bindings ref cast(u8 ref);
+
+            var compound_type = get_type_info(game_key_bindings).compound_type deref;
+            var enumeration_type = get_type_info(platform_key).enumeration_type deref;
+
+            loop var field_index usize; compound_type.fields.count
+            {
+                print(ui, 10, font, cursor ref, "%: ", compound_type.fields[field_index].name);
+
+                var value = base deref;
+                base += 1;
+
+                var found = false;
+                loop var item_index usize; enumeration_type.items.count
+                {
+                    if enumeration_type.items[item_index].value is value
+                    {
+                        print(ui, 10, font, cursor ref, "%\n", enumeration_type.items[item_index].name);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if not found
+                {
+                    var token = { 1, value ref } string;
+                    print(ui, 10, font, cursor ref, "%\n", token);
+                }
+            }
+
+            print(ui, 10, font, cursor ref, "\n");
+        }
+
+        print(ui, 10, font, cursor ref, "Log:\n%", state.error_messages.text);
+    }
 
     if enable_font_cycling
         print(ui, 10, font, cursor ref, "font: % [%]\n", font_paths[font_index], font_index);
@@ -615,9 +652,6 @@ func game_update program_update_type
             }
             else
             {
-                if platform_key_is_active(platform, platform_key.alt) and platform_key_was_pressed(platform, platform_key.f0 + 3)
-                    client.do_shutdown_server = true;
-
                 if platform_button_was_pressed(input.chat)
                 {
                     client.is_chatting = true;
@@ -625,42 +659,55 @@ func game_update program_update_type
                     client.chat_message_edit.used_count  = 0;
                     client.chat_message.text.count       = 0;
                 }
+            }
 
-                var movement vec2;
-                movement.x = input.right.is_active cast(s32) - input.left.is_active cast(s32);
-                movement.y = input.up.is_active cast(s32) - input.down.is_active cast(s32);
-
-                movement = normalize_or_zero(movement);
-                movement *= (player_movement_speed * platform.delta_seconds);
+            {
+                if platform_key_is_active(platform, platform_key.alt) and platform_key_was_pressed(platform, platform_key.f0 + 3)
+                    client.do_shutdown_server = true;
 
                 var entity = get(game, player.entity_id);
 
-                if entity.health
+                var movement vec2;
+                if not client.is_chatting
                 {
-                    client.frame_input.movement += movement;
-                    client.frame_input.do_attack or= input.attack.is_active;
-                    client.frame_input.do_interact or= platform_button_was_pressed(input.interact);
+                    if entity.health
+                    {
+                        movement.x = input.right.is_active cast(s32) - input.left.is_active cast(s32);
+                        movement.y = input.up.is_active cast(s32) - input.down.is_active cast(s32);
 
+                        movement = normalize_or_zero(movement);
+                        movement *= (player_movement_speed * platform.delta_seconds);
+
+                        client.frame_input.movement += movement;
+                        client.frame_input.do_attack or= input.attack.is_active;
+                        client.frame_input.do_interact or= platform_button_was_pressed(input.interact);
+                    }
+                }
+
+                {
                     client.local_player_position += movement;
 
                     // smooth local postion to network position
 
-                    var delta_position = entity.position - client.local_player_position;
-                    if squared_length(delta_position) > 1
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 500, platform.delta_seconds);
-                    else
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
+                    if (squared_length(movement) > 0) or (squared_length(entity.position - client.local_player_position) > (0.5 * 0.5)) or not entity.health
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 100, platform.delta_seconds);
 
-                        // client.local_player_position = lerp(client.local_player_position, entity.position, 0.5);
-                }
-                else
-                {
-                    client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 500, platform.delta_seconds);
+                    if false
+                    {
+                    var delta_position = entity.position - client.local_player_position;
+                    if (squared_length(delta_position) > (0.5 * 0.5)) or not entity.health
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 100, platform.delta_seconds);
+                    else
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity. position, 0.5, platform.delta_seconds);
+                        }
                 }
 
                 // override player entity position
                 client.network_player_position = entity.position;
                 entity.position = client.local_player_position;
+
+                check_world_collision(game.base ref, entity, platform.delta_seconds);
+                client.local_player_position = entity.position;
 
                 var position = client.local_player_position;
 

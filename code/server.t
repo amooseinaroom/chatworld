@@ -2,6 +2,9 @@
 def max_user_knockdown_time = 10 * 60.0; // 10 minutes
 // def max_user_knockdown_time = 30.0; // 30 sec
 
+def enable_server_movement_prediction = true;
+def server_max_prediction_seconds = server_seconds_per_tick * 0.5;
+
 struct game_server
 {
     game game_state;
@@ -17,13 +20,20 @@ struct game_server
 
     next_network_id game_entity_network_id;
 
-    latency_timestamp_milliseconds u64;
-    latency_timeout                f32;
-    latency_id                     u32;
+    // store last couple latencies to help with high latency clients
+    latency_pairs      server_latency_pair[4];
+    latency_pair_index u32;
+    latency_timeout    f32;
 
     chicken_spawn_timeout f32;
 
     do_shutdown b8;
+}
+
+struct server_latency_pair
+{
+    id                     u32;
+    timestamp_milliseconds u64;
 }
 
 struct game_client_connection
@@ -66,6 +76,8 @@ struct game_user_extended
     is_shout_exhausted b8;
 
     fireball_cooldown f32;
+
+    health s32;
 }
 
 def max_server_user_count = 1 cast(u32) bit_shift_left 14;
@@ -99,6 +111,10 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
     }
 
     init(server.game ref, platform_get_random_from_time(platform));
+
+    // init all health
+    loop var i u32; server.users.count
+        server.users.extended_users[i].health = player_max_health;
 
     add_healing_altar(server.game ref, new_network_id(server), [ 3.5, 3.5 ] vec2);
 }
@@ -247,6 +263,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     client.entity_id = add_player(game, client.entity_network_id);
                     client.user_index = found_user_index;
 
+                    var entity = get(game, client.entity_id);
+                    entity.health = server.users.extended_users[client.user_index].health;
+
                     network_print_info("Server: added Client %\n", result.address);
                 }
 
@@ -344,15 +363,20 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
         case network_message_tag.latency
         {
-            if result.message.latency.latency_id is server.latency_id
+            loop var latency_pair_index u32; server.latency_pairs.count
             {
-                var round_trip_milliseconds = timestamp_milliseconds - server.latency_timestamp_milliseconds;
+                if result.message.latency.latency_id is server.latency_pairs[latency_pair_index].id
+                {
+                    var round_trip_milliseconds = timestamp_milliseconds - server.latency_pairs[latency_pair_index].timestamp_milliseconds;
 
-                // avarage over last 10 latencies
-                if not client.latency_milliseconds
-                    client.latency_milliseconds = (round_trip_milliseconds / 2) cast(u32);
-                else
-                    client.latency_milliseconds = (client.latency_milliseconds * 0.9 + (round_trip_milliseconds cast(f32) * 0.05)) cast(u32);
+                    // avarage over last 10 latencies
+                    if not client.latency_milliseconds
+                        client.latency_milliseconds = (round_trip_milliseconds / 2) cast(u32);
+                    else
+                        client.latency_milliseconds = (client.latency_milliseconds * 0.9 + (round_trip_milliseconds cast(f32) * 0.05)) cast(u32);
+
+                    break;
+                }
             }
         }
         case network_message_tag.chat
@@ -362,7 +386,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
             client.broadcast_chat_message = true;
 
-            var user = server.users.extended_users[client.user_index];
+            var user = server.users.extended_users[client.user_index] ref;
 
             if user.is_shout_exhausted or (user.knockdown_timeout > 0)
             {
@@ -446,6 +470,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.remove_player.entity_network_id = client.entity_network_id;
                 send(network, message, server.socket, other.address);
             }
+
+            // save entity health
+            var entity = get(game, client.entity_id);
+            server.users.extended_users[client.user_index].health = entity.health;
 
             network_print_info("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
             remove(game, client.entity_id);
@@ -562,8 +590,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 var entity = player deref;
 
                 // predict future position on other depending on latency
-                var predicted_movement = movement * ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0);
-                entity.position += predicted_movement;
+                if enable_server_movement_prediction
+                {
+                    var predicted_movement = movement * minimum(server_max_prediction_seconds, ((client.latency_milliseconds + other.latency_milliseconds) / 1000.0));
+                    entity.position += predicted_movement;
+                }
 
                 // network_print("player % update %, movement:% (%)\n", player_network_id, do_update_player, predicted_movement, player.movement);
 
@@ -601,16 +632,18 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
     {
         server.latency_timeout += 1.0;
 
-        server.latency_id += 1;
+        var latency_id = server.latency_pairs[server.latency_pair_index].id + 1;
+        server.latency_pair_index = (server.latency_pair_index + 1) mod server.latency_pairs.count;
 
-        if server.latency_id is invalid_latency_id
-            server.latency_id += 1;
+        if latency_id is invalid_latency_id
+            latency_id += 1;
 
-        server.latency_timestamp_milliseconds = platform_local_timestamp_milliseconds(platform);
+        server.latency_pairs[server.latency_pair_index].id = latency_id;
+        server.latency_pairs[server.latency_pair_index].timestamp_milliseconds = platform_local_timestamp_milliseconds(platform);
 
         var message network_message_union;
         message.tag = network_message_tag.latency;
-        message.latency.latency_id  = server.latency_id;
+        message.latency.latency_id = latency_id;
 
         loop var a u32; server.client_count
         {
