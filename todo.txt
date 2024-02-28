@@ -1,4 +1,9 @@
-an mmo needs:
+todo:
+
+harden text messages (acknowledge system)
+upload sprites
+
+done on stream:
 
 day 1:
 
@@ -48,9 +53,3 @@ day 8:
 * add admin to users, so we can send remote commands to the server
 * add server shutdown command
 * some login stability
-
-todo:
-
-upload sprites
-harden text messages (acknowledge system)
-show keybindings and other info while holding F1

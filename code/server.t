@@ -77,7 +77,10 @@ struct game_user_extended
 
     fireball_cooldown f32;
 
-    health s32;
+    position vec2;
+    health   s32;
+
+    tent_id game_entity_id;
 }
 
 def max_server_user_count = 1 cast(u32) bit_shift_left 14;
@@ -264,7 +267,13 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     client.user_index = found_user_index;
 
                     var entity = get(game, client.entity_id);
-                    entity.health = server.users.extended_users[client.user_index].health;
+                    entity.health   = server.users.extended_users[client.user_index].health;
+                    entity.position = server.users.extended_users[client.user_index].position;
+
+                    // delete previous tent
+                    var tent = get(game, server.users.extended_users[client.user_index].tent_id);
+                    if tent
+                        remove(game, server.users.extended_users[client.user_index].tent_id);
 
                     network_print_info("Server: added Client %\n", result.address);
                 }
@@ -473,7 +482,28 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
             // save entity health
             var entity = get(game, client.entity_id);
-            server.users.extended_users[client.user_index].health = entity.health;
+            server.users.extended_users[client.user_index].health   = entity.health;
+            server.users.extended_users[client.user_index].position = entity.position;
+
+            // spawn tent
+            {
+                var tent_id = add(game, game_entity_tag.player_tent, new_network_id(server));
+                var tent_entity = get(game, tent_id);
+                tent_entity.position = entity.position;
+                game.do_update_tick_count[tent_id.index_plus_one - 1] = 2;
+
+                // HACK: use corpse system to delere tent after a certain time
+                tent_entity.max_health = 1;
+                tent_entity.corpse_lifetime = 2 * 60 * 60; // 2 hours
+
+                var tent = game.player_tent[tent_id.index_plus_one - 1] ref;
+                tent.name       = server.users[client.user_index].name;
+                tent.name_color = client.name_color;
+                tent.body_color = client.body_color;
+
+                // store so we can delete it on login
+                server.users.extended_users[client.user_index].tent_id = tent_id;
+            }
 
             network_print_info("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
             remove(game, client.entity_id);
@@ -585,7 +615,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             }
 
             // send predicted player position
-            if do_update_player
+            if client.is_new or do_update_player
             {
                 var entity = player deref;
 
@@ -623,6 +653,15 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             message.update_entity.tag        = game.tag[i];
             message.update_entity.entity     = entity;
             send(network, message, server.socket, client.address);
+
+            if game.tag[i] is game_entity_tag.player_tent
+            {
+                var message network_message_union;
+                message.tag = network_message_tag.update_player_tent;
+                message.update_player_tent.entity_network_id = game.network_id[i];
+                message.update_player_tent.player_tent       = game.player_tent[i];
+                send(network, message, server.socket, client.address);
+            }
         }
     }
 

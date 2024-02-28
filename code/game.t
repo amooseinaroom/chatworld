@@ -21,6 +21,7 @@ struct game_state
     network_id   game_entity_network_id[max_entity_count];
     do_delete    b8[max_entity_count];
     entity       game_entity[max_entity_count];
+    player_tent  game_entity_player_tent[max_entity_count];
 
     // server only maybe
     do_update_tick_count u8[max_entity_count];
@@ -73,7 +74,6 @@ struct game_entity
 
     drag_parent_id game_entity_id;
     drag_child_id  game_entity_id;
-    drag_parent_distance  f32;
 
     expand tags union
     {
@@ -96,10 +96,18 @@ struct game_entity
     };
 }
 
+struct game_entity_player_tent
+{
+    name       string63;
+    name_color rgba8;
+    body_color rgba8;
+}
+
 enum game_entity_tag u8
 {
     none;
     player;
+    player_tent;
     fireball;
     chicken;
     healing_altar;
@@ -303,7 +311,7 @@ func update(game game_state ref, delta_seconds f32)
                 if entity.corpse_lifetime is 0
                 {
                     entity.corpse_lifetime = max_corpse_lifetime;
-                    game.do_update_tick_count[i] = 1;
+                    game.do_update_tick_count[i] = maximum(1, game.do_update_tick_count[i] cast(u32)) cast(u8);
                 }
                 else
                 {

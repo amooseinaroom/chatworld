@@ -685,6 +685,12 @@ func game_update program_update_type
                 }
 
                 {
+                    if not client.local_player_position_is_init
+                    {
+                        client.local_player_position_is_init = true;
+                        client.local_player_position = entity.position;
+                    }
+
                     client.local_player_position += movement;
 
                     // smooth local postion to network position
@@ -910,6 +916,22 @@ func game_update program_update_type
 
                     var color = [ 240, 240, 240, alpha ] rgba8;
                     draw_box(ui, game_render_layer.entity, color, box);
+                }
+                case game_entity_tag.player_tent
+                {
+                    var box box2;
+                    box.min = floor(({ entity.position.x - 0.25, entity.position.y } vec2) * tile_size) + tile_offset;
+                    box.max = ceil(box.min + ([ 0.5, 1 ] vec2 * tile_size));
+
+                    // var alpha = 255 cast(u8);
+                    // if entity.health <= 0
+                        // alpha = (clamp(entity.corpse_lifetime / max_corpse_lifetime, 0, 1) * 255) cast(u8);
+
+                    var tent = game.player_tent[i];
+                    var body_color = tent.body_color;
+                    body_color.a = 128;
+                    draw_box(ui, game_render_layer.ground_overlay, body_color, box);
+                    draw_player_name(ui, font, entity.position, tile_size, tile_offset, to_string(tent.name), tent.name_color);
                 }
                 case game_entity_tag.healing_altar
                 {

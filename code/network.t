@@ -45,6 +45,7 @@ enum network_message_tag
     remove_player;
     update_entity;
     delete_entity;
+    update_player_tent;
     chat;
 
     admin_server_shutdown;
@@ -144,6 +145,14 @@ struct network_message_update_entity
     tag        game_entity_tag;
 }
 
+struct network_message_update_player_tent
+{
+    expand base network_message_base;
+
+    entity_network_id game_entity_network_id;
+    player_tent       game_entity_player_tent;
+}
+
 struct network_message_delete_entity
 {
     expand base network_message_base;
@@ -179,6 +188,7 @@ type network_message_union union
     add_player    network_message_add_player;
     remove_player network_message_remove_player;
     update_entity network_message_update_entity;
+    update_player_tent network_message_update_player_tent;
     delete_entity network_message_delete_entity;
     chat          network_message_chat;
 };

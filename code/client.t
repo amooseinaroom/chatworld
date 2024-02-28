@@ -20,6 +20,7 @@ struct game_client_persistant_state
 
     local_player_position   vec2;
     network_player_position vec2;
+    local_player_position_is_init b8;
 };
 
 struct game_client_state
@@ -359,6 +360,19 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             var entity_id = find_network_entity(game, message.network_id);
             if entity_id.value
                 remove_for_real(game, entity_id);
+        }
+        case network_message_tag.update_player_tent
+        {
+            if client.state is_not client_state.online
+                break;
+
+            var message = result.message.update_player_tent;
+            var entity_id = find_network_entity(game, message.entity_network_id);
+            if not entity_id.value
+                break;
+
+            game.player_tent[entity_id.index_plus_one - 1] = message.player_tent;
+
         }
         case network_message_tag.chat
         {
