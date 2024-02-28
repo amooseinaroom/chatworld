@@ -2,6 +2,7 @@
 import network;
 
 override def use_render_system = true;
+def debug_player_server_position = false;
 
 def game_title = "chatworld client";
 
@@ -54,6 +55,7 @@ struct game_key_bindings
 
     interact u8;
     attack   u8;
+    magic    u8;
 
     chat         u8;
     toggle_shout u8;
@@ -71,6 +73,7 @@ struct game_input
 
     interact platform_button;
     attack   platform_button;
+    magic    platform_button;
 
     chat         platform_button;
     toggle_shout platform_button;
@@ -102,6 +105,7 @@ func load_key_bindings(platform platform_api ref, tmemory memory_arena ref) (key
     result.right    = "D"[0];
     result.interact = "J"[0];
     result.attack   = "K"[0];
+    result.magic    = "L"[0];
     result.chat     = platform_key.enter;
     result.toggle_shout = "S"[0];
     result.accept   = "J"[0];
@@ -689,21 +693,12 @@ func game_update program_update_type
                         movement.x = input.right.is_active cast(s32) - input.left.is_active cast(s32);
                         movement.y = input.up.is_active cast(s32) - input.down.is_active cast(s32);
 
-                        // HACK: 0 means the server has no valid entity and 1 means it has a valid entity
-                        var movement_speed = player_movement_speed_idle;
-                        multiline_comment
-                        {
-                            if entity.player.sword_hitbox_id.value
-                                movement_speed = 0;
-                            else if entity.drag_child_id.value
-                                movement_speed = player_movement_speed_dragging;
-                        }
-
                         movement = normalize_or_zero(movement);
-                        movement *= (movement_speed * platform.delta_seconds);
+                        movement *= platform.delta_seconds;
 
                         client.frame_input.movement += movement;
-                        client.frame_input.do_attack or= input.attack.is_active;
+                        client.frame_input.do_attack or= platform_button_was_pressed(input.attack);
+                        client.frame_input.do_magic or= platform_button_was_pressed(input.magic);
                         client.frame_input.do_interact or= platform_button_was_pressed(input.interact);
                     }
                 }
@@ -715,13 +710,11 @@ func game_update program_update_type
                         client.local_player_position = entity.position;
                     }
 
-                    client.local_player_position += movement;
+                    client.local_player_position += movement * entity.player.movement_speed;
 
                     // smooth local postion to network position
 
-                    if entity.player.force_position_sync
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 1000, platform.delta_seconds);
-                    else if (squared_length(movement) is 0) or (squared_length(entity.position - client.local_player_position) > (0.5 * 0.5)) or not entity.health
+                    if (squared_length(movement) is 0) or (squared_length(entity.position - client.local_player_position) > (0.5 * 0.5)) or not entity.health
                         client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
                     else
                         client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 50, platform.delta_seconds);
@@ -884,7 +877,7 @@ func game_update program_update_type
             }
 
             // actual server send position
-            if false and client.player_count
+            if debug_player_server_position and client.player_count
             {
                 var sprite_texture_box box2;
                 sprite_texture_box.min = [ 0, 0 ] vec2;
@@ -947,7 +940,7 @@ func game_update program_update_type
 
                     var alpha = 255 cast(u8);
                     if entity.health <= 0
-                        alpha = (clamp(entity.corpse_lifetime / max_corpse_lifetime, 0, 1) * 255) cast(u8);
+                        alpha = 128; // (clamp(entity.corpse_lifetime / max_corpse_lifetime, 0, 1) * 255) cast(u8);
 
                     var color = [ 240, 240, 240, alpha ] rgba8;
                     draw_box(ui, game_render_layer.entity, color, box);

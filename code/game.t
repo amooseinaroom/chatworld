@@ -114,7 +114,8 @@ struct game_entity
             fireball_id          game_entity_id;
             sword_swing_progress f32;
 
-            force_position_sync  b8;
+            // send back to client, for better prediction
+            movement_speed f32;
         }
     };
 }
@@ -439,16 +440,17 @@ func update(game game_state ref, delta_seconds f32)
 
                 var max_distance = movement_speed * delta_seconds;
 
-                var distance = squared_length(entity.movement);
+                var movement = entity.movement * movement_speed;
+                var distance = length(movement);
                 var allowed_distance = minimum(max_distance, distance);
-                var movement vec2;
 
                 if distance > 0.0
-                    movement = entity.movement * (allowed_distance / distance);
+                    movement *= allowed_distance / distance;
 
                 // HACK:
                 entity.position += movement;
                 entity.movement = movement; // we need it to send predicted position to the clients {} vec2;
+                entity.player.movement_speed = movement_speed; // send back to client
             }
 
             if sword

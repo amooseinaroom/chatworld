@@ -449,7 +449,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             send(network, message, client.socket, client.server_address);
         }
 
-        if client.frame_input.do_attack or client.frame_input.do_interact or (squared_length(client.frame_input.movement) > 0)
+        if client.frame_input.do_attack or client.frame_input.do_magic or client.frame_input.do_interact or (squared_length(client.frame_input.movement) > 0)
         {
             var message network_message_union;
             message.user_input = client.frame_input;

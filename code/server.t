@@ -294,10 +294,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
             // ignore input from knockdowned players
             if entity.health is 0
-            {
-                entity.player.force_position_sync = true;
                 break;
-            }
 
             entity.movement += result.message.user_input.movement;
 
@@ -311,9 +308,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             }
 
             if result.message.user_input.do_attack
+            label check_attack
             {
                 var player = entity.player ref;
-                player.sword_swing_progress = 0;
 
                 var sword = get(game, player.sword_hitbox_id);
                 if not sword
@@ -324,28 +321,34 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     sword.hitbox.tag = game_entity_hitbox_tag.sword;
                     sword.hitbox.source_id = client.entity_id;
                     sword.hitbox.collision_mask = bit_not (bit64(game_entity_tag.none) bit_or bit64(game_entity_tag.hitbox));
-                    sword.hitbox.damage = 1;
+                    sword.hitbox.damage = 3;
                     sword.view_direction = entity.view_direction;
                 }
+                else if player.sword_swing_progress < 0.5
+                {
+                    break check_attack;
+                }
+
+                player.sword_swing_progress = 0;
 
                 // reset hits
                 game.hitbox_hits[player.sword_hitbox_id.index_plus_one - 1].used_count = 0;
 
                 // sword.position = direction_from_angle(sword.view_direction + (pi32 * 0.5)) * (entity. collider.radius + sword.collider.radius) + entity.position + entity.collider.center;
                 // game.do_update_tick_count[player.sword_hitbox_id.index_plus_one - 1] = 2;
+            }
+            else if result.message.user_input.do_magic
+            {
+                var user = server.users.extended_users[client.user_index] ref;
 
-                if false
+                if (user.fireball_cooldown <= 0) and not get(game, entity.player.sword_hitbox_id)
                 {
-                    var user = server.users.extended_users[client.user_index] ref;
-                    if user.fireball_cooldown <= 0
-                    {
-                        user.fireball_cooldown = 1;
-                        def fireball_speed = 8.0;
+                    user.fireball_cooldown = 1;
+                    def fireball_speed = 8.0;
 
-                        var movement = direction_from_angle(entity.view_direction);
+                    var movement = direction_from_angle(entity.view_direction);
 
-                        add_fireball(game, new_network_id(server), entity.position + [ 0, entity.collider.radius ] vec2, movement * fireball_speed, client.entity_id);
-                    }
+                    add_fireball(game, new_network_id(server), entity.position + [ 0, entity.collider.radius ] vec2, movement * fireball_speed, client.entity_id);
                 }
             }
             else if result.message.user_input.do_interact
@@ -402,10 +405,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             {
                 var sword = get(game, entity.player.sword_hitbox_id);
                 if sword
-                {
-                    entity.player.force_position_sync = true;
                     entity.movement = {} vec2;
-                }
             }
 
             client.do_update = true;
