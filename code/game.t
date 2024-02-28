@@ -1,6 +1,7 @@
 import random;
 
-def player_movement_speed = 6;
+def player_movement_speed_idle     = 6;
+def player_movement_speed_dragging = 3;
 
 struct game_state
 {
@@ -20,11 +21,19 @@ struct game_state
     tag          game_entity_tag[max_entity_count];
     network_id   game_entity_network_id[max_entity_count];
     do_delete    b8[max_entity_count];
+    do_delete_next_tick b8[max_entity_count];
     entity       game_entity[max_entity_count];
     player_tent  game_entity_player_tent[max_entity_count];
+    hitbox_hits  game_entity_hitbox_hits[max_entity_count];
 
     // server only maybe
     do_update_tick_count u8[max_entity_count];
+}
+
+struct game_entity_hitbox_hits
+{
+    expand base       game_entity_id[16];
+           used_count u32;
 }
 
 struct game_entity_network_id
@@ -77,12 +86,6 @@ struct game_entity
 
     expand tags union
     {
-        fireball struct
-        {
-            source_id game_entity_id;
-            lifetime  f32;
-        };
-
         chicken struct
         {
             is_moving              b8;
@@ -93,6 +96,26 @@ struct game_entity
         {
             heal_timeout f32;
         };
+
+        hitbox struct
+        {
+            source_id      game_entity_id;
+            collision_mask u64;
+            damage         s32;
+            lifetime       f32;
+            tag game_entity_hitbox_tag;
+            remove_on_hit  b8;
+            fixed_movement b8;
+        };
+
+        player struct
+        {
+            sword_hitbox_id      game_entity_id;
+            fireball_id          game_entity_id;
+            sword_swing_progress f32;
+
+            force_position_sync  b8;
+        }
     };
 }
 
@@ -108,9 +131,17 @@ enum game_entity_tag u8
     none;
     player;
     player_tent;
-    fireball;
+    // fireball;
+    hitbox;
     chicken;
     healing_altar;
+}
+
+enum game_entity_hitbox_tag u8
+{
+    none;
+    fireball;
+    sword;
 }
 
 func init(game game_state ref, random random_pcg)
@@ -170,13 +201,21 @@ func add_player(game game_state ref, network_id game_entity_network_id) (id game
 
 func add_fireball(game game_state ref, network_id game_entity_network_id, position vec2, movement vec2, source_id game_entity_id)
 {
-    var id = add(game, game_entity_tag.fireball, network_id);
+    var id = add(game, game_entity_tag.hitbox, network_id);
     var entity = get(game, id);
     entity.collider = { {} vec2, 0.25 } sphere2;
     entity.position = position;
     entity.movement = movement;
-    entity.fireball.lifetime = 4;
-    entity.fireball.source_id = source_id;
+    entity.hitbox.tag = game_entity_hitbox_tag.fireball;
+    entity.hitbox.collision_mask = bit_not (bit64(game_entity_tag.none) bit_or bit64(game_entity_tag.hitbox));
+    entity.hitbox.damage = 1;
+    entity.hitbox.lifetime = 4;
+    entity.hitbox.source_id = source_id;
+    entity.hitbox.remove_on_hit = true;
+    entity.hitbox.fixed_movement = true;
+
+    // reset hits
+    game.hitbox_hits[id.index_plus_one - 1].used_count = 0;
 }
 
 func add_chicken(game game_state ref, network_id game_entity_network_id, position vec2)
@@ -200,13 +239,26 @@ func add_healing_altar(game game_state ref, network_id game_entity_network_id, p
     entity.position = position;
 }
 
+var global debug_game_is_inside_update = false;
+
 func remove(game game_state ref, id game_entity_id)
 {
+    assert(not debug_game_is_inside_update, "use remove_next_tick instead");
     assert(id.index_plus_one and (id.index_plus_one <= game.entity.count));
 
     var index = id.index_plus_one - 1;
     assert(not game.do_delete[index]);
     game.do_delete[index] = true;
+}
+
+
+func remove_next_tick(game game_state ref, id game_entity_id)
+{
+    assert(debug_game_is_inside_update, "use remove instead");
+    assert(id.index_plus_one and (id.index_plus_one <= game.entity.count));
+
+    var index = id.index_plus_one - 1;
+    game.do_delete_next_tick[index] = true;
 }
 
 func remove_for_real(game game_state ref, id game_entity_id)
@@ -247,6 +299,9 @@ def max_corpse_lifetime = 10.0;
 
 func update(game game_state ref, delta_seconds f32)
 {
+    if lang_debug
+        debug_game_is_inside_update = true;
+
     // M - distance
     // D - duration
     // f(0)  = a * 0.5 * t² + v * t = 0
@@ -280,7 +335,7 @@ func update(game game_state ref, delta_seconds f32)
         if squared_length(distance) > (radius * radius)
         {
             var target_position = normalize(distance) * radius + parent_position;
-            position = apply_spring_without_overshoot(position, target_position, 500, delta_seconds);
+            position = apply_spring_without_overshoot(position, target_position, 1000, delta_seconds);
             entity.movement += position - entity.collider.center - entity.position;
         }
     }
@@ -295,6 +350,9 @@ func update(game game_state ref, delta_seconds f32)
             remove_for_real(game, { i + 1, game.generation[i] } game_entity_id);
             continue;
         }
+
+        game.do_delete[i] = game.do_delete_next_tick[i];
+        game.do_delete_next_tick[i] = false;
 
         var entity = game.entity[i] ref;
 
@@ -339,47 +397,80 @@ func update(game game_state ref, delta_seconds f32)
         else
             entity.push_velocity += decceleration;
 
-        if squared_length(entity.movement) > 0
-        {
-            var direction = normalize(entity.movement);
-            entity.view_direction = acos(dot([ 1, 0 ] vec2, direction));
-
-            if dot([ 0, 1 ] vec2, direction) > 0
-                entity.view_direction = 2 * pi32 - entity.view_direction;
-        }
-
         var is_dead = entity.max_health and (entity.health <= 0);
 
         switch game.tag[i]
-        case game_entity_tag.fireball
+        case game_entity_tag.hitbox
         {
-            entity.position += entity.movement * delta_seconds;
-            entity.fireball.lifetime -= delta_seconds;
-            if entity.fireball.lifetime <= 0
+            if entity.hitbox.lifetime > 0
             {
-                remove(game, { i + 1, game.generation[i] } game_entity_id);
-                continue;
+                entity.hitbox.lifetime -= delta_seconds;
+
+                if entity.hitbox.lifetime <= 0
+                {
+                    entity.hitbox.lifetime = 0;
+                    remove_next_tick(game, { i + 1, game.generation[i] } game_entity_id);
+                    continue;
+                }
+            }
+
+            if entity.hitbox.fixed_movement
+            {
+                entity.position += entity.movement * delta_seconds;
+            }
+            else
+            {
+                entity.position += entity.movement;
+                entity.movement = {} vec2;
             }
         }
         case game_entity_tag.player
         {
-            var max_distance = player_movement_speed * delta_seconds;
+            var player = entity.player ref;
 
-            // move at half speed when dragging something
-            var drag_child = get(game, entity.drag_child_id);
-            if drag_child
-                max_distance *= 0.5;
+            var sword = get(game, player.sword_hitbox_id);
 
-            var distance = squared_length(entity.movement);
-            var allowed_distance = minimum(max_distance, distance);
-            var movement vec2;
+            {
+                var movement_speed = player_movement_speed_idle;
+                if sword
+                    movement_speed = 0;
+                else if get(game, entity.drag_child_id)
+                    movement_speed = player_movement_speed_dragging;
 
-            if distance > 0.0
-                movement = entity.movement * (allowed_distance / distance);
+                var max_distance = movement_speed * delta_seconds;
 
-            // HACK:
-            entity.position += movement;
-            entity.movement = movement; // we need it to send predicted position to the clients {} vec2;
+                var distance = squared_length(entity.movement);
+                var allowed_distance = minimum(max_distance, distance);
+                var movement vec2;
+
+                if distance > 0.0
+                    movement = entity.movement * (allowed_distance / distance);
+
+                // HACK:
+                entity.position += movement;
+                entity.movement = movement; // we need it to send predicted position to the clients {} vec2;
+            }
+
+            if sword
+            {
+                // var angle = sword.view_direction; // pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
+                var angle = pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
+                var target_position = direction_from_angle(angle) * (entity.collider.radius + sword.collider.radius) + entity.position + entity.collider.center;
+                sword.movement = target_position - sword.position;
+                game.do_update_tick_count[player.sword_hitbox_id.index_plus_one - 1] = 2;
+
+                if player.sword_swing_progress < 1
+                {
+                    def sword_swings_per_second = 4.0;
+                    player.sword_swing_progress += delta_seconds * sword_swings_per_second;
+
+                    if player.sword_swing_progress >= 1
+                    {
+                        player.sword_swing_progress = 1;
+                        remove_next_tick(game, player.sword_hitbox_id);
+                    }
+                }
+            }
         }
         case game_entity_tag.chicken
         {
@@ -464,22 +555,30 @@ func update(game game_state ref, delta_seconds f32)
             game.do_update_tick_count[i] -= 1;
     }
 
-    var fireball_collision_mask = bit_not (bit64(game_entity_tag.none) bit_or bit64(game_entity_tag.fireball));
-    loop var fireball_index u32; game.entity.count
+    if lang_debug
+        debug_game_is_inside_update = false;
+
+    loop var hitbox_index u32; game.entity.count
     {
-        if game.do_delete[fireball_index] or (game.tag[fireball_index] is_not game_entity_tag.fireball)
+        if game.do_delete[hitbox_index] or (game.tag[hitbox_index] is_not game_entity_tag.hitbox)
             continue;
 
-        var fireball = game.entity[fireball_index] ref;
-        var fireball_sphere = fireball.collider;
-        fireball_sphere.center += fireball.position;
+        var hitbox = game.entity[hitbox_index] ref;
+        var hitbox_sphere = hitbox.collider;
+        var hitbox_collision_mask = hitbox.hitbox.collision_mask;
+        var hitbox_damage = hitbox.hitbox.damage;
+        hitbox_sphere.center += hitbox.position;
 
         var did_collide = false;
 
-        var source = get(game, fireball.fireball.source_id);
-        loop var other_index u32; game.entity.count
+        var source = get(game, hitbox.hitbox.source_id);
+        var source_position = source.position + source.collider.center;
+
+        var hitbox_hits = game.hitbox_hits[hitbox_index] ref;
+
+        label other_loop loop var other_index u32; game.entity.count
         {
-            if game.do_delete[other_index] or not (bit64(game.tag[other_index]) bit_and fireball_collision_mask)
+            if game.do_delete[other_index] or not (bit64(game.tag[other_index]) bit_and hitbox_collision_mask)
                 continue;
 
             var other = game.entity[other_index] ref;
@@ -487,23 +586,44 @@ func update(game game_state ref, delta_seconds f32)
             if (other is source) or (other.health is 0)
                 continue;
 
+            var other_id = { other_index, game.generation[other_index] } game_entity_id;
+            loop var hit_index u32; hitbox_hits.used_count
+            {
+                if hitbox_hits[hit_index].value is other_id.value
+                    continue other_loop;
+            }
+
             var other_sphere = other.collider;
             other_sphere.center += other.position;
 
-            var radius = fireball_sphere.radius + other_sphere.radius;
-            if squared_length(fireball_sphere.center - other_sphere.center) < (radius * radius)
+            var radius = hitbox_sphere.radius + other_sphere.radius;
+            if squared_length(hitbox_sphere.center - other_sphere.center) < (radius * radius)
             {
-                var impulse = normalize_or_zero(fireball.movement);
-                other.push_velocity += impulse * push_velocity;
-                other.health = maximum(0, other.health - 1);
+                network_assert(hitbox_hits.used_count < hitbox_hits.count);
+
+                var push_direction vec2;
+                switch hitbox.hitbox.tag
+                case game_entity_hitbox_tag.fireball
+                    push_direction = normalize_or_zero(hitbox.movement);
+                case game_entity_hitbox_tag.sword
+                {
+                    push_direction = normalize_or_zero(other_sphere.center - source_position);
+                }
+                else
+                    assert(0);
+
+                hitbox_hits[hitbox_hits.used_count] = other_id;
+                hitbox_hits.used_count += 1;
+
+                other.push_velocity += push_direction * push_velocity;
+                other.health = maximum(0, other.health - hitbox_damage);
                 did_collide = true;
             }
         }
 
-        game.do_delete[fireball_index] or= did_collide;
+        game.do_delete[hitbox_index] or= did_collide and hitbox.hitbox.remove_on_hit;
     }
 }
-
 
 func check_world_collision(game game_state ref, entity game_entity ref, delta_seconds f32)
 {
@@ -522,6 +642,11 @@ func check_world_collision(game game_state ref, entity game_entity ref, delta_se
     entity.position = collider_position - entity.collider.center;
 }
 
+func direction_from_angle(angle f32) (direction vec2)
+{
+    var direction = [ cos(angle), -sin(angle) ] vec2;
+    return direction;
+}
 
 func update_game_version(platform platform_api ref, tmemory memory_arena ref)
 {

@@ -276,6 +276,16 @@ func save_key_bindings(platform platform_api ref, key_bindings game_key_bindings
 
 func game_init program_init_type
 {
+    // util to get linear rgbs from online color srgb values
+    multiline_comment
+    {
+        print("\n");
+        print("def menu_color_edit = % rgba8;\n", to_rgba8(srgb_to_linear(to_vec4(menu_color_edit))).values);
+        print("def menu_color_idle = % rgba8;\n", to_rgba8(srgb_to_linear(to_vec4(menu_color_idle))).values);
+        print("def menu_color_background = % rgba8;\n", to_rgba8(srgb_to_linear(to_vec4(menu_color_background))).values);
+        print("def menu_color_hot = % rgba8;\n", to_rgba8(srgb_to_linear(to_vec4(menu_color_hot))).values);
+    }
+
     state.letterbox_width_over_heigth = 16.0 / 9.0;
 
     platform_network_init(state.network ref);
@@ -354,7 +364,7 @@ func game_update program_update_type
             state.key_bindings = result.key_bindings;
             if result.error_message.count
             {
-                // reset error_messages if we don't have enough space
+                // reset error_messages if we do not have enough space
                 if result.error_message.count > (state.error_messages.capacity - state.error_messages.text.count)
                     state.error_messages.text.count = 0;
 
@@ -462,20 +472,22 @@ func game_update program_update_type
         else if client.reconnect_count
             print(ui, 10, font, cursor ref, "Server is not responding, it may be offline\n");
 
-        draw_box(ui, -1000, [ 20, 20, 255, 255 ] rgba8, ui.scissor_box);
+        draw_box(ui, -1000, menu_color_background, ui.scissor_box);
 
         var box = draw_box_begin(ui);
         var cursor = cursor_below_position(font.info, ui.viewport_size.width * 0.5, ui.viewport_size.height * 0.75);
 
-        print(ui, menu_layer.text, font, cursor ref, "user: ");
+        print(ui, menu_layer.text, menu_color_idle, font, cursor ref, "user:    ");
         edit_string_begin(client.user_name_edit ref, client.user_name ref);
         menu_text_edit(menu, location_id(0), font, cursor ref, client.user_name_edit ref);
         edit_string_end(client.user_name_edit, client.user_name ref);
 
-        print(ui, menu_layer.text, font, cursor ref, "password: ");
+        print(ui, menu_layer.text, menu_color_idle, font, cursor ref, "password:    ");
         edit_string_begin(client.user_password_edit ref, client.user_password ref);
         menu_text_edit(menu, location_id(0), font, cursor ref, client.user_password_edit ref);
         edit_string_end(client.user_password_edit, client.user_password ref);
+
+        advance_line(font.info, cursor ref);
 
         if menu_button(menu, location_id(0), font, cursor ref, "Host")
         {
@@ -489,15 +501,36 @@ func game_update program_update_type
             init(client, state.network ref, client.server_address);
         }
 
-        if menu_button(menu, location_id(0), font, cursor ref, "Name Color")
+        advance_line(font.info, cursor ref);
+
+        if state.color_edit is_not color_edit_tag.none
+        {
+            var box box2;
+            box.min.x = cursor.position.x + (tile_size * 3);
+            box.max.y = cursor.position.y + (tile_size);
+            box.max.x = ceil(box.min.x + (tile_size * 2));
+            box.min.y = floor(box.max.y - (tile_size * 2));
+
+            var colors =
+            [
+                client.name_color ref,
+                client.body_color ref,
+            ] color_hsva ref[];
+
+            color_wheel(ui, 0, location_id(0), box, colors[state.color_edit - 1], false);
+        }
+
+        if menu_button(menu, location_id(0), font, cursor ref, "Name Color", state.color_edit is color_edit_tag.name_color)
         {
             state.color_edit = color_edit_tag.name_color;
         }
 
-        if menu_button(menu, location_id(0), font, cursor ref, "Body Color")
+        if menu_button(menu, location_id(0), font, cursor ref, "Body Color", state.color_edit is color_edit_tag.body_color)
         {
             state.color_edit = color_edit_tag.body_color;
         }
+
+        advance_line(font.info, cursor ref);
 
         var load_sprite = false;
 
@@ -591,23 +624,6 @@ func game_update program_update_type
             cursor.position.y = box.min.y cast(s32);
             advance_line(font.info, cursor ref);
         }
-
-        if state.color_edit is_not color_edit_tag.none
-        {
-            var box box2;
-            box.min.x = cursor.position.x;
-            box.max.y = cursor.position.y;
-            box.max.x = ceil(box.min.x + (tile_size * 2));
-            box.min.y = floor(box.max.y - (tile_size * 2));
-
-            var colors =
-            [
-                client.name_color ref,
-                client.body_color ref,
-            ] color_hsva ref[];
-
-            color_wheel(ui, 0, location_id(0), box, colors[state.color_edit - 1], false);
-        }
     }
     else
     {
@@ -630,8 +646,6 @@ func game_update program_update_type
             // update(platform, state);
 
             var player = client.players[0] ref;
-
-            var player_predicted_position vec2;
 
             if client.is_chatting
             {
@@ -675,8 +689,18 @@ func game_update program_update_type
                         movement.x = input.right.is_active cast(s32) - input.left.is_active cast(s32);
                         movement.y = input.up.is_active cast(s32) - input.down.is_active cast(s32);
 
+                        // HACK: 0 means the server has no valid entity and 1 means it has a valid entity
+                        var movement_speed = player_movement_speed_idle;
+                        multiline_comment
+                        {
+                            if entity.player.sword_hitbox_id.value
+                                movement_speed = 0;
+                            else if entity.drag_child_id.value
+                                movement_speed = player_movement_speed_dragging;
+                        }
+
                         movement = normalize_or_zero(movement);
-                        movement *= (player_movement_speed * platform.delta_seconds);
+                        movement *= (movement_speed * platform.delta_seconds);
 
                         client.frame_input.movement += movement;
                         client.frame_input.do_attack or= input.attack.is_active;
@@ -695,17 +719,12 @@ func game_update program_update_type
 
                     // smooth local postion to network position
 
-                    if (squared_length(movement) > 0) or (squared_length(entity.position - client.local_player_position) > (0.5 * 0.5)) or not entity.health
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 100, platform.delta_seconds);
-
-                    if false
-                    {
-                    var delta_position = entity.position - client.local_player_position;
-                    if (squared_length(delta_position) > (0.5 * 0.5)) or not entity.health
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 100, platform.delta_seconds);
+                    if entity.player.force_position_sync
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 1000, platform.delta_seconds);
+                    else if (squared_length(movement) is 0) or (squared_length(entity.position - client.local_player_position) > (0.5 * 0.5)) or not entity.health
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
                     else
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity. position, 0.5, platform.delta_seconds);
-                        }
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 50, platform.delta_seconds);
                 }
 
                 // override player entity position
@@ -896,13 +915,29 @@ func game_update program_update_type
                 var entity = game.entity[i] ref;
 
                 switch game.tag[i]
-                case game_entity_tag.fireball
+                case game_entity_tag.hitbox
                 {
-                    var box box2;
-                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-                    var color = [ 255, 128, 25, 255 ] rgba8;
-                    draw_box(ui, game_render_layer.overlay, color, box);
+                    switch entity.hitbox.tag
+                    case game_entity_hitbox_tag.fireball
+                    {
+                        var box box2;
+                        box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                        box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
+                        var color = [ 255, 128, 25, 255 ] rgba8;
+                        draw_box(ui, game_render_layer.overlay, color, box);
+                    }
+                    case game_entity_hitbox_tag.sword
+                    {
+                        var box box2;
+                        box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                        box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
+                        var color = [ 200, 200, 200, 255 ] rgba8;
+                        draw_box(ui, game_render_layer.overlay, color, box);
+                    }
+                    else
+                    {
+                        assert(0);
+                    }
                 }
                 case game_entity_tag.chicken
                 {
