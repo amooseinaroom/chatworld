@@ -1,7 +1,7 @@
 import random;
 
-def player_movement_speed_idle     = 6;
-def player_movement_speed_dragging = 3;
+def player_movement_speed_idle     = 6.0;
+def player_movement_speed_dragging = 3.0;
 
 struct game_state
 {
@@ -110,6 +110,8 @@ struct game_entity
 
         player struct
         {
+            input_movement       vec2;
+
             sword_hitbox_id      game_entity_id;
             fireball_id          game_entity_id;
             sword_swing_progress f32;
@@ -385,6 +387,7 @@ func update(game game_state ref, delta_seconds f32)
         }
 
         var position = entity.position;
+        var do_update = false;
 
         def max_push_velocity = 20.0;
         if squared_length(entity.push_velocity) > (max_push_velocity * max_push_velocity)
@@ -433,43 +436,53 @@ func update(game game_state ref, delta_seconds f32)
 
             {
                 var movement_speed = player_movement_speed_idle;
-                if sword
+                if sword or is_dead
                     movement_speed = 0;
                 else if get(game, entity.drag_child_id)
                     movement_speed = player_movement_speed_dragging;
 
                 var max_distance = movement_speed * delta_seconds;
 
-                var movement = entity.movement * movement_speed;
-                var distance = length(movement);
+                var input_movement = player.input_movement * movement_speed;
+                var distance = length(input_movement);
                 var allowed_distance = minimum(max_distance, distance);
 
                 if distance > 0.0
-                    movement *= allowed_distance / distance;
+                    input_movement *= allowed_distance / distance;
 
-                // HACK:
-                entity.position += movement;
-                entity.movement = movement; // we need it to send predicted position to the clients {} vec2;
+                entity.position += entity.movement + input_movement;
+                entity.movement = {} vec2;
+                player.input_movement = input_movement; // we need it to send predicted position to the clients {} vec2;
+
+                do_update or= entity.player.movement_speed is_not movement_speed;
                 entity.player.movement_speed = movement_speed; // send back to client
             }
 
             if sword
             {
-                // var angle = sword.view_direction; // pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
-                var angle = pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
-                var target_position = direction_from_angle(angle) * (entity.collider.radius + sword.collider.radius) + entity.position + entity.collider.center;
-                sword.movement = target_position - sword.position;
-                game.do_update_tick_count[player.sword_hitbox_id.index_plus_one - 1] = 2;
-
-                if player.sword_swing_progress < 1
+                if is_dead
                 {
-                    def sword_swings_per_second = 4.0;
-                    player.sword_swing_progress += delta_seconds * sword_swings_per_second;
+                    player.sword_swing_progress = 1;
+                    remove_next_tick(game, player.sword_hitbox_id);
+                }
+                else
+                {
+                    // var angle = sword.view_direction; // pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
+                    var angle = pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
+                    var target_position = direction_from_angle(angle) * (entity.collider.radius + sword.collider.radius) + entity.position + entity.collider.center;
+                    sword.movement = target_position - sword.position;
+                    game.do_update_tick_count[player.sword_hitbox_id.index_plus_one - 1] = 2;
 
-                    if player.sword_swing_progress >= 1
+                    if player.sword_swing_progress < 1
                     {
-                        player.sword_swing_progress = 1;
-                        remove_next_tick(game, player.sword_hitbox_id);
+                        def sword_swings_per_second = 4.0;
+                        player.sword_swing_progress += delta_seconds * sword_swings_per_second;
+
+                        if player.sword_swing_progress >= 1
+                        {
+                            player.sword_swing_progress = 1;
+                            remove_next_tick(game, player.sword_hitbox_id);
+                        }
                     }
                 }
             }
@@ -553,6 +566,8 @@ func update(game game_state ref, delta_seconds f32)
         // this way we send the predicted position and one final rest idle position
         if squared_length(position - entity.position) > 0
             game.do_update_tick_count[i] = 2;
+        else if do_update
+            game.do_update_tick_count[i] = maximum(game.do_update_tick_count[i] cast(u32), 1) cast(u8);
         else if game.do_update_tick_count[i]
             game.do_update_tick_count[i] -= 1;
     }

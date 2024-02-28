@@ -710,12 +710,14 @@ func game_update program_update_type
                         client.local_player_position = entity.position;
                     }
 
-                    client.local_player_position += movement * entity.player.movement_speed;
+                    movement *= entity.player.movement_speed;
+
+                    client.local_player_position += movement;
 
                     // smooth local postion to network position
 
-                    if (squared_length(movement) is 0) or (squared_length(entity.position - client.local_player_position) > (0.5 * 0.5)) or not entity.health
-                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 200, platform.delta_seconds);
+                    if (squared_length(movement) is 0) or (squared_length(entity.position - client.local_player_position) > (0.25 * 0.25))
+                        client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 1000, platform.delta_seconds);
                     else
                         client.local_player_position = apply_spring_without_overshoot(client.local_player_position, entity.position, 50, platform.delta_seconds);
                 }

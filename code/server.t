@@ -296,11 +296,12 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             if entity.health is 0
                 break;
 
-            entity.movement += result.message.user_input.movement;
+            var player = entity.player ref;
+            player.input_movement += result.message.user_input.movement;
 
-            if squared_length(entity.movement) > 0
+            if squared_length(player.input_movement) > 0
             {
-                var direction = normalize(entity.movement);
+                var direction = normalize(player.input_movement);
                 entity.view_direction = acos(dot([ 1, 0 ] vec2, direction));
 
                 if dot([ 0, 1 ] vec2, direction) > 0
@@ -310,7 +311,6 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             if result.message.user_input.do_attack
             label check_attack
             {
-                var player = entity.player ref;
 
                 var sword = get(game, player.sword_hitbox_id);
                 if not sword
@@ -333,9 +333,6 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 // reset hits
                 game.hitbox_hits[player.sword_hitbox_id.index_plus_one - 1].used_count = 0;
-
-                // sword.position = direction_from_angle(sword.view_direction + (pi32 * 0.5)) * (entity. collider.radius + sword.collider.radius) + entity.position + entity.collider.center;
-                // game.do_update_tick_count[player.sword_hitbox_id.index_plus_one - 1] = 2;
             }
             else if result.message.user_input.do_magic
             {
@@ -405,7 +402,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             {
                 var sword = get(game, entity.player.sword_hitbox_id);
                 if sword
-                    entity.movement = {} vec2;
+                    player.input_movement = {} vec2;
             }
 
             client.do_update = true;
@@ -611,12 +608,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         // so we can send the exact position, instead of a prediction
         var movement vec2;
         if do_update_player > 1
-            movement = player.movement * prediction_movement_scale;
+            movement = player.player.input_movement * prediction_movement_scale;
 
         var position = player.position;
-
-        // HACK:
-        player.movement = {} vec2;
+        player.player.input_movement = {} vec2;
 
         var send_entity = player deref;
 
