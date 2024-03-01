@@ -88,6 +88,7 @@ struct game_entity
     {
         chicken struct
         {
+            move_direction         vec2;
             is_moving              b8;
             toggle_moveing_timeout f32;
         };
@@ -118,6 +119,19 @@ struct game_entity
 
             // send back to client, for better prediction
             movement_speed f32;
+        };
+
+        flag_target struct
+        {
+            team_index u32;
+            team_color rgba8;
+            has_scored_flag b8;
+        };
+
+        flag struct
+        {
+            team_index u32;
+            team_color rgba8;
         }
     };
 }
@@ -133,10 +147,11 @@ enum game_entity_tag u8
 {
     none;
     player;
-    player_tent;
-    // fireball;
+    player_tent;    
     hitbox;
     chicken;
+    flag;
+    flag_target;
     healing_altar;
 }
 
@@ -178,6 +193,7 @@ func add(game game_state ref, tag game_entity_tag, network_id game_entity_networ
     game.tag[index] = tag;
 
     game.do_delete[index] = false;
+    game.do_update_tick_count[index] = 1; // force one initial update
 
     var id game_entity_id;
     id.index_plus_one = index + 1;
@@ -240,6 +256,32 @@ func add_healing_altar(game game_state ref, network_id game_entity_network_id, p
     var entity = get(game, id);
     entity.collider = { {} vec2, 1.5 } sphere2;
     entity.position = position;
+}
+
+func add_flag(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8) (id game_entity_id)
+{
+    var id = add(game, game_entity_tag.flag, network_id);
+
+    var entity = get(game, id);
+    entity.collider = { {} vec2, 0.25 } sphere2;
+    entity.position = position;
+    entity.flag.team_index = team_index;
+    entity.flag.team_color = team_color;
+
+    return id;
+}
+
+func add_flag_target(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8) (id game_entity_id)
+{
+    var id = add(game, game_entity_tag.flag_target, network_id);
+
+    var entity = get(game, id);
+    entity.collider = { {} vec2, 1.5 } sphere2;
+    entity.position = position;
+    entity.flag_target.team_index = team_index;
+    entity.flag_target.team_color = team_color;
+
+    return id;
 }
 
 var global debug_game_is_inside_update = false;
@@ -488,35 +530,41 @@ func update(game game_state ref, delta_seconds f32)
             }
         }
         case game_entity_tag.chicken
-        {
-            if is_dead
-                break;
-
+        {        
             var chicken = entity.chicken ref;
-            chicken.toggle_moveing_timeout -= delta_seconds;
-            if chicken.toggle_moveing_timeout <= 0
+
+            if not is_dead
             {
-                chicken.is_moving = not chicken.is_moving;
-
-                if chicken.is_moving
+                chicken.toggle_moveing_timeout -= delta_seconds;
+                if chicken.toggle_moveing_timeout <= 0
                 {
-                    var direction_angle = random_f32_zero_to_one(game.random ref) * pi32 * 2;
-                    var direction = [ cos(direction_angle), sin(direction_angle) ] vec2;
+                    chicken.is_moving = not chicken.is_moving;
 
-                    chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 10 + 0.5;
-                    entity.movement = direction;
-                }
-                else
-                {
-                    chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 4 + 1;
-                    entity.movement = {} vec2;
+                    if chicken.is_moving
+                    {
+                        var direction_angle = random_f32_zero_to_one(game.random ref) * pi32 * 2;
+                        var direction = [ cos(direction_angle), sin(direction_angle) ] vec2;
+
+                        chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 10 + 0.5;
+                        chicken.move_direction = direction;
+                    }
+                    else
+                    {
+                        chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 4 + 1;
+                        chicken.move_direction = {} vec2;
+                    }
                 }
             }
+            else
+            {
+                chicken.move_direction = {} vec2;
+            }
 
-            if chicken.is_moving
+            // if chicken.is_moving
             {
                 def chicken_movement_speed = 2.0;
-                entity.position += entity.movement * (chicken_movement_speed * delta_seconds);
+                entity.position += chicken.move_direction * (chicken_movement_speed * delta_seconds) + entity.movement;
+                entity.movement = {} vec2;
             }
         }
         case game_entity_tag.healing_altar
@@ -551,6 +599,37 @@ func update(game game_state ref, delta_seconds f32)
                     if other.health is_not health
                         game.do_update_tick_count[other_index] = maximum(game.do_update_tick_count[other_index] cast(u32), 1 cast(u32)) cast(u8);
                 }
+            }
+        }
+        case game_entity_tag.flag_target
+        {            
+            var target = entity.flag_target ref;                            
+            var position = entity.position + entity.collider.center;
+            var radius   = entity.collider.radius;
+
+            var target_mask = bit64(game_entity_tag.flag);
+            var team_index = target.team_index;
+
+            loop var other_index u32; game.entity.count
+            {
+                if not (bit64(game.tag[other_index]) bit_and target_mask) or game.do_delete[other_index]
+                    continue;
+
+                var other = game.entity[other_index] ref;
+                if other.flag.team_index is team_index
+                    continue;
+        
+                // only score if not dragged
+                if get(game, other.drag_parent_id)
+                    continue;
+
+                var other_position = other.position + other.collider.center;
+                var max_distance = radius + other.collider.radius;
+                if squared_length(other_position - position) > (max_distance * max_distance)
+                    continue;
+
+                remove_next_tick(game, { other_index + 1, game.generation[other_index] } game_entity_id);   
+                target.has_scored_flag = true;             
             }
         }
         else

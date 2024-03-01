@@ -9,6 +9,8 @@ struct game_server
 {
     game game_state;
 
+    capture_the_flag capture_the_flag_state;
+
     random random_pcg;
 
     socket platform_network_socket;
@@ -17,6 +19,8 @@ struct game_server
 
     clients      game_client_connection[max_player_count];
     client_count u32;
+
+    pending_messages server_pending_network_message_buffer;
 
     next_network_id game_entity_network_id;
 
@@ -28,6 +32,23 @@ struct game_server
     chicken_spawn_timeout f32;
 
     do_shutdown b8;
+}
+
+def capture_the_flag_event_timeout  = 10.0; // 15 * 60.0;
+def capture_the_flag_event_duration = 20.0; //  5 * 60.0;
+
+struct capture_the_flag_state
+{
+    // by team id
+    player_count   u32[2];
+    score          u32[2];
+    flag_position  vec2[2];
+    flag_target_id game_entity_id[2]; 
+    flag_id        game_entity_id[2];
+    
+    play_time  f32;
+    running_id u32;
+    is_running b8;
 }
 
 struct server_latency_pair
@@ -49,6 +70,8 @@ struct game_client_connection
     do_update  b8;
     is_new     b8;
     do_remove  b8;
+
+    capture_the_flag_team_index u32;
 
     latency_milliseconds u32;
 
@@ -97,7 +120,52 @@ struct game_user_buffer_extended
            extended_users game_user_extended[max_server_user_count];
 }
 
+struct server_pending_network_message
+{
+    expand base    network_message_union;
+    client_mask    u64[(max_player_count + 63) / 64];
+    resend_timeout f32;
+}
+
+struct server_pending_network_message_buffer
+{
+    expand base                        server_pending_network_message[2048];
+           used_count                  u32;
+           next_acknowledge_message_id u16;
+}
+
+func queue(server game_server ref, message network_message_union)
+{
+    var buffer = server.pending_messages ref;
+    network_assert(buffer.used_count < buffer.count);
+
+    var pending_message = buffer[buffer.used_count] ref;
+    buffer.used_count += 1;
+    pending_message deref = {} server_pending_network_message;
+
+    buffer.next_acknowledge_message_id += 1;
+    if buffer.next_acknowledge_message_id is network_acknowledge_message_id_invalid
+        buffer.next_acknowledge_message_id += 1;
+
+    pending_message.base = message;
+    pending_message.base.acknowledge_message_id = buffer.next_acknowledge_message_id;
+
+    loop var client_index u32; server.client_count
+    {
+        var slot = client_index / 64;
+        var bit  = client_index mod 64;
+        pending_message.client_mask[slot] bit_or = bit64(bit);
+    }
+}
+
+
 def server_user_path = "server_users.bin";
+
+def capture_the_flag_team_colors =
+[
+    [ 255, 0, 0, 128   ] rgba8,
+    [   0, 0, 255, 128 ] rgba8
+] rgba8[];
 
 func init(server game_server ref, platform platform_api ref, network platform_network ref, server_port u16, tmemory memory_arena ref)
 {
@@ -117,9 +185,18 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
 
     // init all health
     loop var i u32; server.users.count
-        server.users.extended_users[i].health = player_max_health;
+        server.users.extended_users[i].health = player_max_health;    
 
-    add_healing_altar(server.game ref, new_network_id(server), [ 3.5, 3.5 ] vec2);
+    server.capture_the_flag.flag_position[0] = [ 15.5, 15.5 ] vec2;
+    server.capture_the_flag.flag_position[1] = [ 45.5, 15.5 ] vec2;
+    
+    loop var i u32; 2
+    {
+        server.capture_the_flag.flag_target_id[i] = add_flag_target(server.game ref, new_network_id(server), server.capture_the_flag.flag_position[i], i, capture_the_flag_team_colors[i]);
+
+        var sign = i cast(f32) * 2 - 1;
+        add_healing_altar(server.game ref, new_network_id(server), [ 5, 5 ] vec2 * sign + server.capture_the_flag.flag_position[i]);
+    }
 }
 
 func save(platform platform_api ref, server game_server ref)
@@ -170,9 +247,49 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             continue;
 
         switch result.message.tag
+        case network_message_tag.acknowledge
+        {
+            var acknowledge_message_id = result.message.acknowledge_message_id;
+            network_print("Server: got acknowledge % [%]", result.message.tag, acknowledge_message_id);
+
+            var buffer = server.pending_messages ref;
+            loop var message_index u32; buffer.used_count
+            {
+                var message = buffer[message_index] ref;
+                if message.base.acknowledge_message_id is acknowledge_message_id
+                {
+                    var slot = found_client_index / 64;
+                    var bit  = found_client_index mod 64;
+
+                    message.client_mask[slot] bit_and= bit_not bit64(bit);
+
+                    var do_remove = true;
+                    loop var i u32; message.client_mask.count
+                    {                        
+                        if message.client_mask[i]
+                        {
+                            do_remove = false;  
+                            break;
+                        }
+                    }
+
+                    if do_remove
+                    {
+                        network_print("Server: removed pending message [%]", acknowledge_message_id);
+                        buffer.used_count -= 1;
+                        buffer[message_index] = buffer[buffer.used_count];
+                    }
+
+                    break;
+                }                
+            }
+        }
         case network_message_tag.login
         {
             var message = result.message.login;
+
+            if message.acknowledge_message_id is network_acknowledge_message_id_invalid
+                break;
 
             var reject_reason = network_message_reject_reason.none;
 
@@ -235,7 +352,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             if reject_reason is_not 0
             {
                 var message network_message_union;
-                message.tag = network_message_tag.login_reject;
+                message.tag = network_message_tag.login_reject;                
+                message.acknowledge_message_id = result.message.acknowledge_message_id; // counts as acknowledge for loging message
                 message.login_reject.reason = reject_reason;
                 send(network, message, server.socket, result.address);
             }
@@ -282,6 +400,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 var message network_message_union;
                 message.tag = network_message_tag.login_accept;
+                message.acknowledge_message_id = result.message.acknowledge_message_id; // counts as acknowledge for loging message
                 message.login_accept.player_entity_network_id = client.entity_network_id;
                 message.login_accept.is_admin = server.users[found_user_index].is_admin;
                 send(network, message, server.socket, client.address);
@@ -366,9 +485,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     var position = entity.position + entity.collider.center;
                     var radius   = entity.collider.radius * 0.5; // we want to overlap other by half our radius
 
+                    var drag_mask = bit64(game_entity_tag.player) bit_or bit64(game_entity_tag.flag) bit_or bit64(game_entity_tag.chicken);
+
                     loop var i u32; game.entity.count
                     {
-                        if (game.tag[i] is_not game_entity_tag.player) or (i is entity_index)
+                        if not (bit64(game.tag[i]) bit_and drag_mask) or (i is entity_index)
                             continue;
 
                         var other = game.entity[i] ref;
@@ -485,6 +606,15 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             client.missed_heartbeat_count = 0;
         }
 
+        if result.message.tag is_not network_message_tag.acknowledge and (result.message.acknowledge_message_id is_not network_acknowledge_message_id_invalid)
+        {
+            var message network_message_union;
+            message.tag                    = network_message_tag.acknowledge;
+            message.acknowledge_message_id = result.message.acknowledge_message_id;
+            network_print("Server: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
+            send(network, message, server.socket, client.address);
+        }
+
         network_print_info("Server: client message % %\n", result.message.tag, result.address);
     }
 
@@ -545,6 +675,31 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 server.users.extended_users[client.user_index].tent_id = tent_id;
             }
 
+            // updated client masks in pending_messages
+            // TODO: test this
+            {
+                var buffer = server.pending_messages ref;
+
+                var remove_slot     = a / 64;
+                var remove_bit_mask = bit64(a  mod 64);
+                
+                var swapped_slot     = (server.client_count - 1) / 64;
+                var swapped_bit_mask = bit64((server.client_count - 1) mod 64);
+
+                loop var message_index u32; buffer.used_count
+                {
+                    var message = buffer[message_index] ref;
+
+                    message.client_mask[remove_slot] bit_and= bit_not remove_bit_mask;
+
+                    var swapped_is_set = (message.client_mask[swapped_slot] bit_and swapped_bit_mask);
+                    message.client_mask[swapped_slot] bit_and= bit_not swapped_bit_mask;
+
+                    if swapped_is_set
+                        message.client_mask[remove_slot] bit_or= remove_bit_mask;
+                }
+            }
+
             network_print_info("Server: Client % missed to many heartbeats and is considered MIA\n", client.address);
             remove(game, client.entity_id);
             server.client_count -= 1;
@@ -565,11 +720,16 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             var message network_message_union;
             message.tag = network_message_tag.delete_entity;
             message.delete_entity.network_id = game.network_id[i];
+            queue(server, message);
+
+            multiline_comment
+            {
 
             loop var a u32; server.client_count
             {
                 var client = server.clients[a] ref;
                 send(network, message, server.socket, client.address);
+            }
             }
         }
     }
@@ -585,6 +745,157 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
     }
 
     update(server.game ref, delta_seconds);
+    
+    {
+        var capture_the_flag = server.capture_the_flag ref;
+        
+        capture_the_flag.play_time += delta_seconds;
+
+        if capture_the_flag.is_running
+        {   
+            loop var team_index u32; capture_the_flag.score.count
+            {
+                var target = get(server.game ref, capture_the_flag.flag_target_id[team_index]);
+                if target.flag_target.has_scored_flag            
+                {
+                    capture_the_flag.score[team_index] += 1;            
+
+                    capture_the_flag.running_id += 1;
+
+                    var message network_message_union;
+                    message.tag = network_message_tag.capture_the_flag_score;
+                    message.capture_the_flag_score.running_id = capture_the_flag.running_id;
+                    message.capture_the_flag_score.play_time = capture_the_flag.play_time;
+                    message.capture_the_flag_score.team_index = team_index;
+                    message.capture_the_flag_score.score      = capture_the_flag.score[team_index];                
+                    queue(server, message);
+                }
+
+                target.flag_target.has_scored_flag = false;            
+
+                var flag = get(server.game ref, capture_the_flag.flag_id[team_index]);
+                if not flag            
+                {
+                    var color = capture_the_flag_team_colors[team_index];
+                    color.a = 255;
+                    capture_the_flag.flag_id[team_index] = add_flag(server.game ref, new_network_id(server), capture_the_flag.flag_position[team_index], team_index, color);            
+                }
+            }    
+            
+            if capture_the_flag.play_time >= capture_the_flag_event_duration
+            {
+                capture_the_flag.play_time -= capture_the_flag_event_duration;
+
+                capture_the_flag.is_running = false;
+
+                var message network_message_union;
+                message.tag = network_message_tag.capture_the_flag_ended;                
+                queue(server, message);
+
+                loop var team_index; 2
+                {
+                    var flag = get(server.game ref, capture_the_flag.flag_id[team_index]);
+                    if flag     
+                        remove(server.game ref, capture_the_flag.flag_id[team_index]);
+                }
+            }            
+        }
+        else
+        {            
+            if capture_the_flag.play_time >= capture_the_flag_event_timeout
+            {
+                capture_the_flag.play_time -= capture_the_flag_event_timeout;
+                capture_the_flag.is_running = true;
+
+                capture_the_flag.running_id = 0;
+                capture_the_flag.score[0] = 0;
+                capture_the_flag.score[1] = 0;
+                capture_the_flag.player_count[0] = 0;
+                capture_the_flag.player_count[1] = 0;
+
+                loop var client_index u32; server.client_count
+                {       
+                    var client = server.clients[client_index] ref;
+                    client.capture_the_flag_team_index = u32_invalid_index;
+                }
+
+                loop var team_index u32; 2
+                {
+                    var target = get(server.game ref, capture_the_flag.flag_target_id[team_index]);
+
+                    var target_position = target.position + target.collider.center;
+                    var target_radius   = target.collider.radius;
+
+                    loop var client_index u32; server.client_count
+                    {
+                        var client = server.clients[client_index] ref;
+                        var player = get(server.game ref, client.entity_id);                        
+
+                        var position = player.position + player.collider.center;
+                        var radius   = player.collider.radius;
+                        
+                        var max_distance = target_radius + radius;
+                        if squared_length(target_position - position) > (max_distance * max_distance)
+                            continue;
+                        
+                        capture_the_flag.player_count[team_index] += 1;
+                        
+                        client.capture_the_flag_team_index = team_index;                        
+                    }
+                }
+
+                // balance team counts
+                var player_count = minimum(capture_the_flag.player_count[0], capture_the_flag.player_count[1]);
+                capture_the_flag.player_count[0] = 0;
+                capture_the_flag.player_count[1] = 0;
+
+                loop var client_index u32; server.client_count
+                {       
+                    var client = server.clients[client_index];
+                    var team_index = client.capture_the_flag_team_index;
+
+                    var color rgba8;
+                    if team_index < capture_the_flag_team_colors.count
+                    {
+                        if capture_the_flag.player_count[team_index] < player_count                    
+                        {
+                            capture_the_flag.player_count[team_index] += 1;
+                        }
+                        else
+                        {
+                            team_index = u32_invalid_index;
+                            client.capture_the_flag_team_index = u32_invalid_index;
+                        }
+                    }
+
+                    if team_index < capture_the_flag_team_colors.count
+                    {                    
+                        color = capture_the_flag_team_colors[team_index];
+                        color.a = 255;                       
+                    }
+
+                    var message network_message_union;
+                    message.tag = network_message_tag.capture_the_flag_player_team;
+                    message.capture_the_flag_player_team.entity_network_id = client.entity_network_id;
+                    message.capture_the_flag_player_team.team_index        = team_index;
+                    message.capture_the_flag_player_team.team_color        = color;
+                    queue(server, message);
+                }
+
+                if not player_count
+                {
+                    // wait for the next event                    
+                    capture_the_flag.is_running = false;
+                }
+                else
+                {
+                    var message network_message_union;
+                    message.tag = network_message_tag.capture_the_flag_started;
+                    queue(server, message);                
+                }
+            }
+        }
+    }
 
     // prevent spikes when delta_seconds is very low
     var prediction_movement_scale f32;
@@ -729,6 +1040,34 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             var client = server.clients[a] ref;
             message.latency.latency_milliseconds = client.latency_milliseconds;
             send(network, message, server.socket, client.address);
+        }
+    }
+
+    // send pending_messages
+    {
+        var buffer = server.pending_messages ref;
+        loop var message_index u32; buffer.used_count
+        {
+            var message = buffer[message_index];
+            message.resend_timeout -= delta_seconds * 2; // twice per second
+            if message.resend_timeout > 0
+                continue;
+
+            message.resend_timeout += 1;
+
+            loop var client_index u32; server.client_count
+            {
+                var client = server.clients[client_index];
+
+                var slot = client_index / 64;
+                var bit  = client_index mod 64;
+
+                if message.client_mask[slot] bit_and bit64(bit)
+                {
+                    network_print("Server: send % [%]", message.base.tag, message.base.acknowledge_message_id);
+                    send(network, message.base, server.socket, client.address);                
+                }
+            }
         }
     }
 

@@ -409,14 +409,13 @@ func game_update program_update_type
         var font_height = ceil(tile_size * 0.25) cast(s32);
         if font_changed or (state.font.info.pixel_height is_not font_height)
         {
-            temporary_end(memory, state.memory_reload_used_byte_count);
-
             if state.font.atlas.handle
                 glDeleteTextures(1, state.font.atlas.handle ref);
 
             state.font = {} ui_font;
 
-            init(state.font ref,  platform, memory, tmemory, font_paths[font_index], font_height, 1024);
+            clear(state.font_memory ref);
+            init(state.font ref,  platform, state.font_memory ref, tmemory, font_paths[font_index], font_height, 1024);
         }
     }
 
@@ -644,6 +643,21 @@ func game_update program_update_type
 
         if (client.state is client_state.online)
         {
+            if client.capture_the_flag.is_running
+            {
+                var minutes = (client.capture_the_flag.play_time / 60) cast(u32);
+                var seconds = (client.capture_the_flag.play_time - (minutes * 60)) cast(u32);
+                print(ui, 10, font, cursor ref, "Capture The Flag time %:% - red % - % blue", minutes, seconds, client.capture_the_flag.score[0], client.capture_the_flag.score[1]);
+
+                client.capture_the_flag.play_time += platform.delta_seconds;
+            }
+            else if client.capture_the_flag.play_time > 0
+            {
+                print(ui, 10, font, cursor ref, "Capture The Flag over. Result: - red % - % blue", client.capture_the_flag.score[0], client.capture_the_flag.score[1]);
+
+                client.capture_the_flag.play_time -= platform.delta_seconds;
+            }
+
             if client.is_admin
                 print(ui, 10, font, cursor ref, "Admin User");
 
@@ -768,6 +782,8 @@ func game_update program_update_type
 
             var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
 
+            var show_capture_the_flag_team_color = client.capture_the_flag.is_running or (client.capture_the_flag.play_time > 0);
+
             loop var i u32; client.player_count
             {
                 var player = client.players[i];
@@ -781,6 +797,16 @@ func game_update program_update_type
 
                 var player_box = draw_player(ui, position, tile_size, tile_offset, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction, entity.health is 0);
                 draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), player.name_color);
+
+                if show_capture_the_flag_team_color and (player.capture_the_flag_team_index < 2)
+                {
+                    var pivot = get_point(player_box, [ 0.5, 0.7 ] vec2);
+                    var box box2;
+                    var half_size = ceil(tile_size * 0.125);
+                    box.min = pivot - half_size;
+                    box.max = box.min + (half_size * 2);
+                    draw_box(ui, game_render_layer.entity + 1, player.capture_the_flag_team_color, box);
+                }
 
                 if player.chat_message_timeout > 0
                 label draw_chat_box
@@ -947,6 +973,16 @@ func game_update program_update_type
                     var color = [ 240, 240, 240, alpha ] rgba8;
                     draw_box(ui, game_render_layer.entity, color, box);
                 }
+                case game_entity_tag.flag
+                {
+                    var box box2;
+                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));                    
+
+                    var color = [ 240, 10, 240, 255 ] rgba8;
+                    draw_box(ui, game_render_layer.entity, color, box);
+                    draw_box(ui, game_render_layer.entity + 1, entity.flag.team_color, grow(box, -ceil(tile_size * 0.1)));
+                }
                 case game_entity_tag.player_tent
                 {
                     var box box2;
@@ -971,6 +1007,14 @@ func game_update program_update_type
 
                     var color = [ 50, 255, 50, 255 ] rgba8;
                     draw_box(ui, game_render_layer.ground_overlay, color, box);
+                }
+                case game_entity_tag.flag_target
+                {
+                    var box box2;
+                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
+                    
+                    draw_box(ui, game_render_layer.ground_overlay, entity.flag_target.team_color, box);
                 }
             }
 

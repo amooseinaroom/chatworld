@@ -41,6 +41,8 @@ struct game_client
 
     game game_client_state;
 
+    pending_messages client_pending_network_message_buffer;
+
     state client_state;
     reconnect_timeout f32;
     reconnect_count   u32;
@@ -65,6 +67,15 @@ struct game_client
 
     entity_id         game_entity_id;
     entity_network_id game_entity_network_id;
+
+    capture_the_flag struct
+    {        
+        score u32[2];
+
+        running_id u32;
+        play_time  f32;
+        is_running b8;
+    };
 
     heartbeat_timeout f32;
 
@@ -216,6 +227,9 @@ struct game_player
     entity_id         game_entity_id;
     entity_network_id game_entity_network_id;
 
+    capture_the_flag_team_index u32;
+    capture_the_flag_team_color rgba8;
+
     sprite_index_plus_one u32;
 }
 
@@ -224,6 +238,53 @@ enum client_state
     disconnected;
     connecting;
     online;
+}
+
+struct client_pending_network_message
+{
+    expand base    network_message_union;    
+    resend_timeout f32;
+}
+
+struct client_pending_network_message_buffer
+{
+    expand base                         client_pending_network_message[2048];
+           used_count                   u32;
+           next_acknowledge_message_id  u16;
+           resend_count_without_replies u32;
+}
+
+func queue(client game_client ref, message network_message_union)
+{
+    var buffer = client.pending_messages ref;
+    network_assert(buffer.used_count < buffer.count);
+
+    var pending_message = buffer[buffer.used_count] ref;
+    buffer.used_count += 1;
+    pending_message deref = {} client_pending_network_message;
+
+    buffer.next_acknowledge_message_id += 1;
+    if buffer.next_acknowledge_message_id is network_acknowledge_message_id_invalid
+        buffer.next_acknowledge_message_id += 1;
+
+    pending_message.base = message;
+    pending_message.base.acknowledge_message_id = buffer.next_acknowledge_message_id;    
+}
+
+func remove_acknowledge_message(client game_client ref, acknowledge_message_id u16, debug_tag network_message_tag)
+{
+    var buffer = client.pending_messages ref;
+    loop var message_index u32; buffer.used_count
+    {
+        var message = buffer[message_index] ref;
+        if message.base.acknowledge_message_id is acknowledge_message_id
+        {                  
+            network_print("Client: removed pending message % [%]", debug_tag, acknowledge_message_id);
+            buffer.used_count -= 1;
+            buffer[message_index] = buffer[buffer.used_count];
+            break;
+        }
+    }
 }
 
 func init(client game_client ref, network platform_network ref, server_address platform_network_address)
@@ -243,6 +304,15 @@ func init(client game_client ref, network platform_network ref, server_address p
     network_print("Client: started. version: %, port: %\n, print level: %, debug: %, enable_hot_reloading: %", game_version, client.socket.port, network_print_max_level, lang_debug, enable_hot_reloading);
     client.state = client_state.connecting;
     client.server_address = server_address;
+
+    var message network_message_union;
+    message.tag = network_message_tag.login;
+    message.login.client_version = game_version;
+    message.login.name     = client.user_name;
+    message.login.password = client.user_password;
+    message.login.name_color = to_rgba8(client.name_color.color);
+    message.login.body_color = to_rgba8(client.body_color.color);
+    queue(client, message);
 }
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
@@ -267,10 +337,34 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
         if result.address is_not client.server_address
             continue;
+        
+        // debug drop messages sometimes
+        if false
+        {
+            if result.message.acknowledge_message_id is_not network_acknowledge_message_id_invalid
+            {
+                var global throw_index u32;
+                throw_index = (throw_index + 1) mod 5;
+                if not throw_index
+                {
+                    network_print("Client: dropped message % [%]", result.message.tag, result.message.acknowledge_message_id);
+                    continue;
+                }
+            }
+        }
+
+        // received a life sign from server
+        client.pending_messages.resend_count_without_replies = 0;
 
         switch result.message.tag
+        case network_message_tag.acknowledge
+        {            
+            remove_acknowledge_message(client, result.message.acknowledge_message_id, result.message.tag);
+        }
         case network_message_tag.login_accept
         {
+            remove_acknowledge_message(client, result.message.acknowledge_message_id, result.message.tag);
+
             if client.state is client_state.connecting
             {
                 client.entity_network_id = result.message.login_accept.player_entity_network_id;
@@ -291,6 +385,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         }
         case network_message_tag.login_reject
         {
+            remove_acknowledge_message(client, result.message.acknowledge_message_id, result.message.tag);
+
             client.state = client_state.disconnected;
             client.reject_reason = result.message.login_reject.reason;
         }
@@ -395,6 +491,46 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             client.latency_milliseconds = result.message.latency.latency_milliseconds;
             reply_latency_id = result.message.latency.latency_id;
         }
+        case network_message_tag.capture_the_flag_started
+        {
+            clear_value(client.capture_the_flag ref);
+            client.capture_the_flag.is_running = true;
+        }
+        case network_message_tag.capture_the_flag_ended
+        {   
+            client.capture_the_flag.play_time = 1 * 60.0; // time to fade score result         
+            client.capture_the_flag.is_running = false;
+        }
+        case network_message_tag.capture_the_flag_score
+        {
+            var message = result.message.capture_the_flag_score;
+            if message.running_id > client.capture_the_flag.running_id
+            {
+                client.capture_the_flag.score[message.team_index] = message.score;
+                client.capture_the_flag.play_time = message.play_time;
+                client.capture_the_flag.running_id = message.running_id;
+            }
+        }
+        case network_message_tag.capture_the_flag_player_team
+        {
+            var message = result.message.capture_the_flag_player_team;
+            
+            var entity_id = find_network_entity(game, message.entity_network_id);
+            assert(entity_id.value);
+
+            var player = find_player(client, entity_id);
+            player.capture_the_flag_team_index = message.team_index;
+            player.capture_the_flag_team_color = message.team_color;
+        }
+
+        if  result.message.tag is_not network_message_tag.acknowledge and (result.message.acknowledge_message_id is_not network_acknowledge_message_id_invalid)
+        {
+            var message network_message_union;
+            message.tag                    = network_message_tag.acknowledge;
+            message.acknowledge_message_id = result.message.acknowledge_message_id;
+            network_print("Client: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
+            send(network, message, client.socket, client.server_address);   
+        }
 
         network_print_info("Client: server message % %\n", result.message.tag, result.address);
     }
@@ -406,6 +542,15 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
     }
     case client_state.connecting
     {
+        if client.pending_messages.resend_count_without_replies > 10
+        {
+            client.state = client_state.disconnected;
+            break;
+        }
+
+        multiline_comment
+        {
+
         client.reconnect_timeout -= delta_seconds;
 
         if client.reconnect_timeout <= 0
@@ -426,9 +571,9 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.login.password = client.user_password;
             message.login.name_color = to_rgba8(client.name_color.color);
             message.login.body_color = to_rgba8(client.body_color.color);
-
             send(network, message, client.socket, client.server_address);
             network_print_info("Client: reconnecting\n");
+        }
         }
     }
     case client_state.online
@@ -495,6 +640,24 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         message.tag = network_message_tag.latency;
         message.latency.latency_id = reply_latency_id;
         send(network, message, client.socket, client.server_address);
+    }
+
+    // send pending_messages
+    {
+        var buffer = client.pending_messages ref;
+        loop var message_index u32; buffer.used_count
+        {
+            var message = buffer[message_index];
+            message.resend_timeout -= delta_seconds * 2; // twice per second
+            if message.resend_timeout > 0
+                continue;
+
+            message.resend_timeout += 1;
+            buffer.resend_count_without_replies += 1;
+                            
+            network_print("Client: send % [%]", message.base.tag, message.base.acknowledge_message_id);
+            send(network, message.base, client.socket, client.server_address);
+        }
     }
 }
 

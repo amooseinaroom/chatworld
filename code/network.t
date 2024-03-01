@@ -24,17 +24,19 @@ enum network_print_level
 func network_print print_type
 {
     if enable_network_print
-        print(format, values);
+        print_line(format, values);
 }
 
 func network_print_info print_type
 {
     if enable_network_print and (network_print_level.info <= network_print_max_level)
-        print(format, values);
+        print_line(format, values);
 }
 
-enum network_message_tag
+enum network_message_tag u8
 {
+    invalid;
+    acknowledge;
     login;
     login_accept;
     login_reject;
@@ -48,13 +50,24 @@ enum network_message_tag
     update_player_tent;
     chat;
 
+    capture_the_flag_started;
+    capture_the_flag_score;
+    capture_the_flag_ended;
+    capture_the_flag_player_team;
+
     admin_server_shutdown;
 }
 
+// messages with other ids need to be acknowledged
+def network_acknowledge_message_id_invalid = 0 cast(u16);
+
 struct network_message_base
 {
-    tag network_message_tag;
+    tag                    network_message_tag;
+    acknowledge_message_id u16;
 }
+
+type network_message_acknowledge network_message_base;
 
 struct network_message_login
 {
@@ -176,6 +189,25 @@ struct network_message_chat
     text network_message_chat_text;
 }
 
+struct network_message_capture_the_flag_score
+{
+    expand base network_message_base;
+
+    running_id u32;
+    play_time  f32;
+    team_index u32;
+    score      u32;
+}
+
+struct network_message_capture_the_flag_player_team
+{
+    expand base network_message_base;
+
+    entity_network_id game_entity_network_id;
+    team_index        u32;
+    team_color        rgba8;
+}
+
 type network_message_union union
 {
     expand base network_message_base;
@@ -192,6 +224,9 @@ type network_message_union union
     update_player_tent network_message_update_player_tent;
     delete_entity network_message_delete_entity;
     chat          network_message_chat;
+
+    capture_the_flag_score       network_message_capture_the_flag_score;
+    capture_the_flag_player_team network_message_capture_the_flag_player_team;
 };
 
 func send(network platform_network ref, message network_message_union, send_socket platform_network_socket, address = {} platform_network_address)
