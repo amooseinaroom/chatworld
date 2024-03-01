@@ -34,8 +34,11 @@ struct game_server
     do_shutdown b8;
 }
 
-def capture_the_flag_event_timeout  = 10.0; // 15 * 60.0;
-def capture_the_flag_event_duration = 20.0; //  5 * 60.0;
+def capture_the_flag_event_timeout  = 2.5 * 60.0;
+def capture_the_flag_event_duration = 5.0 * 60.0;
+
+// def capture_the_flag_event_timeout  = 10.0; // 15 * 60.0;
+// def capture_the_flag_event_duration = 20.0; //  5 * 60.0;
 
 struct capture_the_flag_state
 {
