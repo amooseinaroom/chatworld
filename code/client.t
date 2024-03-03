@@ -279,7 +279,7 @@ func remove_acknowledge_message(client game_client ref, acknowledge_message_id u
         var message = buffer[message_index] ref;
         if message.base.acknowledge_message_id is acknowledge_message_id
         {                  
-            network_print("Client: removed pending message % [%]", debug_tag, acknowledge_message_id);
+            network_print_info("Client: removed pending message % [%]", debug_tag, acknowledge_message_id);
             buffer.used_count -= 1;
             buffer[message_index] = buffer[buffer.used_count];
             break;
@@ -347,7 +347,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 throw_index = (throw_index + 1) mod 5;
                 if not throw_index
                 {
-                    network_print("Client: dropped message % [%]", result.message.tag, result.message.acknowledge_message_id);
+                    network_print_info("Client: dropped message % [%]", result.message.tag, result.message.acknowledge_message_id);
                     continue;
                 }
             }
@@ -528,7 +528,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             var message network_message_union;
             message.tag                    = network_message_tag.acknowledge;
             message.acknowledge_message_id = result.message.acknowledge_message_id;
-            network_print("Client: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
+            network_print_info("Client: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
             send(network, message, client.socket, client.server_address);   
         }
 
@@ -655,7 +655,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.resend_timeout += 1;
             buffer.resend_count_without_replies += 1;
                             
-            network_print("Client: send % [%]", message.base.tag, message.base.acknowledge_message_id);
+            network_print_info("Client: send % [%]", message.base.tag, message.base.acknowledge_message_id);
             send(network, message.base, client.socket, client.server_address);
         }
     }

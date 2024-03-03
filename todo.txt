@@ -1,9 +1,15 @@
 todo:
 
-harden text messages (acknowledge system)
 upload sprites
 
 done on stream:
+
+day 10:
+* 2D renderer from scratch to replace ui code
+
+day 9:
+* acknowledge message system
+* capture the flag event
 
 day 1:
 

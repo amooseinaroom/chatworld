@@ -1,5 +1,6 @@
 
 import network;
+import render_2d;
 
 override def use_render_system = true;
 def debug_player_server_position = false;
@@ -11,6 +12,8 @@ def game_title = "chatworld client";
 struct program_state
 {
     expand default default_program_state;
+
+    render_2d render_2d_api;
 
     network platform_network;
 
@@ -280,6 +283,8 @@ func save_key_bindings(platform platform_api ref, key_bindings game_key_bindings
 
 func game_init program_init_type
 {
+    var tmemory = state.temporary_memory ref;
+
     // util to get linear rgbs from online color srgb values
     multiline_comment
     {
@@ -289,6 +294,14 @@ func game_init program_init_type
         print("def menu_color_background = % rgba8;\n", to_rgba8(srgb_to_linear(to_vec4(menu_color_background))).values);
         print("def menu_color_hot = % rgba8;\n", to_rgba8(srgb_to_linear(to_vec4(menu_color_hot))).values);
     }
+
+    // loop var i; lang_global_variables.count
+    // {        
+    //     var variable = lang_global_variables[i];
+    //     print("global %\n", variable.name);
+    // }
+
+    init(state.render_2d ref, state.gl ref, tmemory);
 
     state.letterbox_width_over_heigth = 16.0 / 9.0;
 
@@ -301,7 +314,7 @@ func game_init program_init_type
     client.server_address.ip[0] = 127;
     client.server_address.ip[3] = 1;
 
-    update_game_version(platform, state.temporary_memory ref);
+    update_game_version(platform, tmemory);
 
     // client.server_address.ip.u8_values = [ 77, 64, 253, 6 ] u8[];
     // client.server_address.port = 50881;
@@ -318,10 +331,10 @@ func game_init program_init_type
     client.name_color.alpha      = 1.0;
     evaluate(client.name_color ref);
 
-    client.server_address = load_server_address(platform, state.network ref, state.temporary_memory ref, client.server_address);
+    client.server_address = load_server_address(platform, state.network ref, tmemory, client.server_address);
 
     {
-        var result = try_platform_read_entire_file(platform, state.temporary_memory ref, client_save_state_path);
+        var result = try_platform_read_entire_file(platform, tmemory, client_save_state_path);
         if result.ok and (result.data.count is type_byte_count(game_client_save_state))
         {
             var save_state = result.data.base cast(game_client_save_state ref) deref;
@@ -343,10 +356,12 @@ func game_update program_update_type
     var tmemory = state.temporary_memory ref;
     var ui      = state.ui ref;
     var client  = state.client ref;
+    var render = state.render_2d ref;
+
     var menu = state.menu ref;
     menu.ui = ui;
     menu.characters = { platform.character_count, platform.character_buffer.base } platform_character[];
-
+    
     var game = client.game ref;
 
     var tiles_per_width = 20;
@@ -354,6 +369,11 @@ func game_update program_update_type
     var tile_size = ui.viewport_size.width / tiles_per_width;
 
     var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
+
+    {        
+        var context = { ui.viewport_size, tile_offset, v2(tile_size) } render_2d_context;
+        frame(render, context, tmemory);
+    }
 
     // try reloading key_bindings
     {
@@ -642,6 +662,7 @@ func game_update program_update_type
         }
 
         if (client.state is client_state.online)
+        label client_online
         {
             if client.capture_the_flag.is_running
             {
@@ -660,7 +681,7 @@ func game_update program_update_type
 
             if client.is_admin
                 print(ui, 10, font, cursor ref, "Admin User");
-
+            
             // update(platform, state);
 
             var player = client.players[0] ref;
@@ -763,22 +784,43 @@ func game_update program_update_type
 
             // update(game, platform.delta_seconds);
 
+            // TEST render_2d            
+            {                                
+                var texture_box box2;
+                texture_box.max = [ 128, 128 ] vec2;
+
+                var position = get_y_sorted_position(render, client.local_player_position);
+                // { , v2(0.5) } render_2d_position;
+                draw_texture_box(render, position, v2(1.0), [ 1, 0, 0, 1 ] vec4, {} render_2d_texture, texture_box);                             
+
+                position = get_y_sorted_position(render, { 4, 4 } vec2);
+                // { , v2(0.5) } render_2d_position;
+                draw_texture_box(render, position, v2(1.0), [ 0, 1, 0, 1 ] vec4, {} render_2d_texture, texture_box);                             
+
+                position = get_y_sorted_position(render, client.local_player_position - [ 0, 0.01 ] vec2);                                
+                draw_circle(render, position.pivot + [ 0, 1 ] vec2, 0.5, position.depth, [ 1, 1, 0, 0.5 ] vec4);                             
+            }                            
+            
             loop var y; game_world_size.y
             {
                 loop var x; game_world_size.x
                 {
                     var box box2;
-                    box.min = floor({ x, y } vec2 * tile_size) + tile_offset;
-                    box.max = ceil(box.min + tile_size);
+                    box.min = [ x, y ] vec2;
+                    box.max = box.min + 1;
                     var colors = [
-                        [ 100, 25, 25, 255 ] rgba8,
-                        [ 25, 25, 100, 255 ] rgba8,
-                    ] rgba8[];
+                        [ 0.5, 0.1, 0.1, 1.0 ] vec4,
+                        [ 0.1, 0.1, 0.5, 1.0 ] vec4,
+                    ] vec4[];
 
                     var color = colors[(x + y) bit_and 1];
-                    draw_box(ui, game_render_layer.ground, color, box);
+                    
+                    var position = { [ x, y ] vec2, {} vec2, 0.99 } render_2d_position;
+                    draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
                 }
             }
+
+            break client_online;
 
             var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
 
@@ -1043,6 +1085,12 @@ func game_update program_update_type
     return true;
 }
 
+override func game_render game_render_type
+{   
+    var tmemory = state.temporary_memory ref;
+    var render = state.render_2d ref;
+    execute(render, state.gl ref, tmemory);
+}
 
 enum render_texture_slot render_texture_slot_base
 {

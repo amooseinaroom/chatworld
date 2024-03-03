@@ -253,7 +253,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         case network_message_tag.acknowledge
         {
             var acknowledge_message_id = result.message.acknowledge_message_id;
-            network_print("Server: got acknowledge % [%]", result.message.tag, acknowledge_message_id);
+            network_print_info("Server: got acknowledge % [%]", result.message.tag, acknowledge_message_id);
 
             var buffer = server.pending_messages ref;
             loop var message_index u32; buffer.used_count
@@ -278,7 +278,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                     if do_remove
                     {
-                        network_print("Server: removed pending message [%]", acknowledge_message_id);
+                        network_print_info("Server: removed pending message [%]", acknowledge_message_id);
                         buffer.used_count -= 1;
                         buffer[message_index] = buffer[buffer.used_count];
                     }
@@ -614,7 +614,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             var message network_message_union;
             message.tag                    = network_message_tag.acknowledge;
             message.acknowledge_message_id = result.message.acknowledge_message_id;
-            network_print("Server: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
+            network_print_info("Server: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
             send(network, message, server.socket, client.address);
         }
 
@@ -1067,7 +1067,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                 if message.client_mask[slot] bit_and bit64(bit)
                 {
-                    network_print("Server: send % [%]", message.base.tag, message.base.acknowledge_message_id);
+                    network_print_info("Server: send % [%]", message.base.tag, message.base.acknowledge_message_id);
                     send(network, message.base, server.socket, client.address);                
                 }
             }
