@@ -127,6 +127,8 @@ struct game_entity
             fireball_id          game_entity_id;
             sword_swing_progress f32;
 
+            healed_health_while_knocked_down s32;
+
             team_index u32;
             team_color rgba8;
 
@@ -316,6 +318,7 @@ func add_flag_target(game game_state ref, network_id game_entity_network_id, pos
     entity.position = position;
     entity.flag_target.team_index = team_index;
     entity.flag_target.team_color = team_color;
+    entity.flag_target.team_color.a = 128;
 
     return id;
 }
@@ -327,6 +330,8 @@ func add_dog_retriever(game game_state ref, network_id game_entity_network_id, p
     var entity = get(game, id);
     entity.collider = { {} vec2, 0.33 } sphere2;
     entity.position = position;
+    entity.max_health = 1;
+    entity.health = entity.max_health;
     entity.dog_retriever.team_index = team_index;
     entity.dog_retriever.team_color = team_color;
     entity.dog_retriever.player_target_position = player_target_position;
@@ -393,23 +398,23 @@ func get(game game_state ref, id game_entity_id) (entity game_entity ref)
 
 def max_corpse_lifetime = 10.0;
 
+// M - distance
+// D - duration
+// f(0)  = a * 0.5 * t² + v * t = 0
+// f(D)  = a * 0.5 * D² + v * D = M
+// f2(D) = a * D + v = 0
+//       = a * -0.5 * D² = M
+//       => a = M * -2 / D²
+//       => v = M * 2 / D
+def push_distance = 2.0;
+def push_duration = 0.5;
+def push_decceleration = (push_distance * -2) / (push_duration * push_duration);
+def push_velocity      = (push_distance * 2)  / push_duration;
+
 func update(game game_state ref, delta_seconds f32)
 {
     if lang_debug
         debug_game_is_inside_update = true;
-
-    // M - distance
-    // D - duration
-    // f(0)  = a * 0.5 * t² + v * t = 0
-    // f(D)  = a * 0.5 * D² + v * D = M
-    // f2(D) = a * D + v = 0
-    //       = a * -0.5 * D² = M
-    //       => a = M * -2 / D²
-    //       => v = M * 2 / D
-    def push_distance = 2.0;
-    def push_duration = 0.5;
-    def push_decceleration = (push_distance * -2) / (push_duration * push_duration);
-    def push_velocity      = (push_distance * 2)  / push_duration;
 
     // apply dragging to movement
     loop var i u32; game.entity.count
@@ -627,7 +632,7 @@ func update(game game_state ref, delta_seconds f32)
         }
         case game_entity_tag.healing_altar
         {
-            def healing_altar_heals_per_second = 0.25;
+            def healing_altar_heals_per_second = 2;
             var healing_altar = entity.healing_altar ref;
             healing_altar.heal_timeout -= delta_seconds * healing_altar_heals_per_second;
             if healing_altar.heal_timeout <= 0
@@ -651,10 +656,21 @@ func update(game game_state ref, delta_seconds f32)
                     if squared_length(other_position - position) > (max_distance * max_distance)
                         continue;
 
-                    var health = other.health;
-                    other.health = minimum(other.health + 1, other.max_health);
+                    var previous_health = other.health;
+                    if previous_health
+                    {
+                        other.health = minimum(other.health + 1, other.max_health);
+                    }
+                    else
+                    {
+                        // delay revive until we have accumulated a bit of health
+                        // will be reset when the player is knocked down on server
+                        other.player.healed_health_while_knocked_down += 1;
+                        if other.player.healed_health_while_knocked_down >= (other.max_health / 2)
+                            other.health = minimum(other.player.healed_health_while_knocked_down, other.max_health);
+                    }
 
-                    if other.health is_not health
+                    if other.health is_not previous_health
                         game.do_update_tick_count[other_index] = maximum(game.do_update_tick_count[other_index] cast(u32), 1 cast(u32)) cast(u8);
                 }
             }
@@ -692,13 +708,19 @@ func update(game game_state ref, delta_seconds f32)
         }
         case game_entity_tag.dog_retriever
         {
-            var retriever = entity.dog_retriever ref;
+            var dog_retriever = entity.dog_retriever ref;
             var position = entity.position + entity.collider.center;
             var radius   = entity.collider.radius;
 
+            // can be damaged, so it drops when it is delivering something
+            // but always heals back up
+            assert(entity.max_health is 1);
+            entity.health = entity.max_health;
+            entity.corpse_lifetime = 0;
+
             var retriever_id = { i + 1, game.generation[i] } game_entity_id;
 
-            switch retriever.state
+            switch dog_retriever.state
             case game_entity_dog_retreiver_state.sleep
             {
                 // noting to do
@@ -706,7 +728,7 @@ func update(game game_state ref, delta_seconds f32)
             case game_entity_dog_retreiver_state.search
             {
                 var target_mask = bit64(game_entity_tag.flag) bit_or bit64(game_entity_tag.player);
-                var team_index = retriever.team_index;
+                var team_index = dog_retriever.team_index;
 
                 var closest_distance_squared = 10000.0;
                 var closest_entiy_index = u32_invalid_index;
@@ -725,21 +747,34 @@ func update(game game_state ref, delta_seconds f32)
                     if get(game, other.drag_parent_id)
                         continue;
 
+                    var other_position = other.position + other.collider.center;
+                    var other_radius   = other.collider.radius;
+                    var pick_radius = (radius + other_radius) * 1.5;
+
                     var other_team_index u32;
                     switch game.tag[other_index]
                     case game_entity_tag.flag
                     {
                         other_team_index = other.flag.team_index;
+
+                        if squared_length(other_position - dog_retriever.flag_target_position) < (pick_radius * pick_radius)
+                            continue;
                     }
                     case game_entity_tag.player
                     {
                         other_team_index = other.player.team_index;
+
+                        if squared_length(other_position - dog_retriever.player_target_position) < (pick_radius * pick_radius)
+                            continue;
+                    }
+                    else
+                    {
+                        assert(0);
                     }
 
                     if other_team_index is_not team_index
                         continue;
 
-                    var other_position = other.position + other.collider.center;
                     var distance_squared = squared_length(other_position - position);
                     if closest_distance_squared < distance_squared
                         continue;
@@ -759,25 +794,25 @@ func update(game game_state ref, delta_seconds f32)
                 {
                     if closest_entiy_is_player
                     {
-                        retriever.state = game_entity_dog_retreiver_state.pick_player;
-                        retriever.target_position = retriever.player_target_position;
+                        dog_retriever.state = game_entity_dog_retreiver_state.pick_player;
+                        dog_retriever.target_position = dog_retriever.player_target_position;
                     }
                     else
                     {
-                        retriever.state = game_entity_dog_retreiver_state.pick_flag;
-                        retriever.target_position = retriever.flag_target_position;
+                        dog_retriever.state = game_entity_dog_retreiver_state.pick_flag;
+                        dog_retriever.target_position = dog_retriever.flag_target_position;
                     }
 
-                    retriever.pick_id = { closest_entiy_index + 1, game.generation[closest_entiy_index] } game_entity_id;
+                    dog_retriever.pick_id = { closest_entiy_index + 1, game.generation[closest_entiy_index] } game_entity_id;
                 }
             }
             case game_entity_dog_retreiver_state.pick_flag, game_entity_dog_retreiver_state.pick_player
             {
-                var pick_target = get(game, retriever.pick_id);
+                var pick_target = get(game, dog_retriever.pick_id);
                 if not pick_target or pick_target.health or get(game, pick_target.drag_parent_id)
                 {
-                    retriever.pick_id = {} game_entity_id;
-                    retriever.state = game_entity_dog_retreiver_state.search;
+                    dog_retriever.pick_id = {} game_entity_id;
+                    dog_retriever.state = game_entity_dog_retreiver_state.search;
                     break;
                 }
 
@@ -792,34 +827,39 @@ func update(game game_state ref, delta_seconds f32)
                 {
                    assert(not get(game, pick_target.drag_parent_id));
                     pick_target.drag_parent_id = retriever_id;
-                    entity.drag_child_id       = retriever.pick_id;
-                    retriever.pick_id          = {} game_entity_id;
-                    retriever.state = game_entity_dog_retreiver_state.deliver;
+                    entity.drag_child_id       = dog_retriever.pick_id;
+                    dog_retriever.pick_id          = {} game_entity_id;
+                    dog_retriever.state = game_entity_dog_retreiver_state.deliver;
                 }
 
                 entity.position += entity.movement + movement;
             }
             case game_entity_dog_retreiver_state.deliver
             {
-                var drag_target = get(game, entity.drag_child_id);
-                if not drag_target
+                var drag_child = get(game, entity.drag_child_id);
+                if not drag_child
                 {
-                    retriever.state = game_entity_dog_retreiver_state.search;
+                    dog_retriever.state = game_entity_dog_retreiver_state.search;
                     break;
                 }
 
-                assert(drag_target.drag_parent_id is retriever_id);
+                assert(drag_child.drag_parent_id is retriever_id);
+
+                var drop_radius = radius + drag_child.collider.radius;
 
                 def movement_speed = 8.0;
                 var max_distance = movement_speed * delta_seconds;
-                var movement = retriever.target_position - position;
-                if squared_length(movement) > (max_distance * max_distance)
-                    movement = normalize(movement) * max_distance;
-                else
+                var movement = dog_retriever.target_position - position;
+                var movement_lenght_squared = squared_length(movement);
+                if movement_lenght_squared > (max_distance * max_distance)
                 {
-                    drag_target.drag_parent_id = {} game_entity_id;
+                    movement = normalize(movement) * max_distance;
+                }
+                else if movement_lenght_squared < (drop_radius * drop_radius)
+                {
+                    drag_child.drag_parent_id = {} game_entity_id;
                     entity.drag_child_id       = {} game_entity_id;
-                    retriever.state = game_entity_dog_retreiver_state.search;
+                    dog_retriever.state = game_entity_dog_retreiver_state.search;
                 }
 
                 entity.position += entity.movement + movement;

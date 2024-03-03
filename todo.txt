@@ -1,6 +1,7 @@
 todo:
 
 upload sprites
+pet the dog
 
 done on stream:
 

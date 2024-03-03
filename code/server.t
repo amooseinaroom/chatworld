@@ -37,11 +37,11 @@ struct game_server
     do_shutdown b8;
 }
 
-// def capture_the_flag_event_timeout  = 2.5 * 60.0;
-// def capture_the_flag_event_duration = 5.0 * 60.0;
+def capture_the_flag_event_timeout  = 30.0;
+def capture_the_flag_event_duration = 5.0 * 60.0;
 
-def capture_the_flag_event_timeout  = 10.0;
-def capture_the_flag_event_duration = 60.0;
+// override def capture_the_flag_event_timeout  = 10.0;
+// override def capture_the_flag_event_duration = 60.0;
 
 struct capture_the_flag_state
 {
@@ -77,8 +77,6 @@ struct game_client_connection
     do_update  b8;
     is_new     b8;
     do_remove  b8;
-
-    capture_the_flag_team_index u32;
 
     latency_milliseconds u32;
 
@@ -230,8 +228,8 @@ def server_user_path = "server_users.bin";
 
 def capture_the_flag_team_colors =
 [
-    [ 255, 0, 0, 128   ] rgba8,
-    [   0, 0, 255, 128 ] rgba8
+    [ 255, 0,   0, 255 ] rgba8,
+    [   0, 0, 255, 255 ] rgba8
 ] rgba8[];
 
 func init(server game_server ref, platform platform_api ref, network platform_network ref, server_port u16, tmemory memory_arena ref)
@@ -261,15 +259,15 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
     server.capture_the_flag.flag_position[0] = [ 15.5, 15.5 ] vec2;
     server.capture_the_flag.flag_position[1] = [ 45.5, 15.5 ] vec2;
 
-    loop var i u32; 2
+    loop var team_index u32; 2
     {
-        server.capture_the_flag.flag_target_id[i] = add_flag_target(server.game ref, new_network_id(server), server.capture_the_flag.flag_position[i], i, capture_the_flag_team_colors[i]);
+        server.capture_the_flag.flag_target_id[team_index] = add_flag_target(server.game ref, new_network_id(server), server.capture_the_flag.flag_position[team_index], team_index, capture_the_flag_team_colors[team_index]);
 
-        var sign = i cast(f32) * 2 - 1;
-        var healing_altar_position = [ 5, 5 ] vec2 * sign + server.capture_the_flag.flag_position[i];
+        var sign = team_index cast(f32) * 2 - 1;
+        var healing_altar_position = [ 5, 5 ] vec2 * sign + server.capture_the_flag.flag_position[team_index];
         add_healing_altar(server.game ref, new_network_id(server), healing_altar_position);
 
-        server.capture_the_flag.dog_id[i] = add_dog_retriever(server.game ref, new_network_id(server), healing_altar_position, i, capture_the_flag_team_colors[i], healing_altar_position, server.capture_the_flag.flag_position[i]);
+        server.capture_the_flag.dog_id[team_index] = add_dog_retriever(server.game ref, new_network_id(server), healing_altar_position, team_index, capture_the_flag_team_colors[team_index], healing_altar_position, server.capture_the_flag.flag_position[team_index]);
     }
 }
 
@@ -551,6 +549,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 var drag_child = get(game, entity.drag_child_id);
                 if drag_child
                 {
+                    var push = normalize_or_zero(player.input_movement) * (push_velocity * 1.25);
+                    drag_child.push_velocity += push;
+                    entity.push_velocity -= push;
                     drag_child.drag_parent_id = {} game_entity_id;
                     entity.drag_child_id = {} game_entity_id;
                 }
@@ -864,9 +865,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 var flag = get(server.game ref, capture_the_flag.flag_id[team_index]);
                 if not flag
                 {
-                    var color = capture_the_flag_team_colors[team_index];
-                    color.a = 255;
-                    capture_the_flag.flag_id[team_index] = add_flag(server.game ref, new_network_id(server), capture_the_flag.flag_position[team_index], team_index, color);
+                    capture_the_flag.flag_id[team_index] = add_flag(server.game ref, new_network_id(server), capture_the_flag.flag_position[team_index], team_index, capture_the_flag_team_colors[team_index]);
                 }
             }
 
@@ -880,7 +879,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 message.tag = network_message_tag.capture_the_flag_ended;
                 queue(server, message);
 
-                loop var team_index; 2
+                loop var team_index u32; 2
                 {
                     var flag = get(server.game ref, capture_the_flag.flag_id[team_index]);
                     if flag
@@ -907,7 +906,10 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 {
                     var client game_client_connection ref;
                     while next_client(server, client ref)
-                        client.capture_the_flag_team_index = u32_invalid_index;
+                    {
+                        var player = get(server.game ref, client.entity_id);
+                        player.player.team_index = u32_invalid_index;
+                    }
                 }
 
                 loop var team_index u32; 2
@@ -931,15 +933,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                         capture_the_flag.player_count[team_index] += 1;
 
-                        client.capture_the_flag_team_index = team_index;
+                        player.player.team_index = team_index;
                     }
-                }
-
-                loop var team_index u32; 2
-                {
-                    var dog = get(server.game ref, capture_the_flag.dog_id[team_index]);
-                    dog.dog_retriever.state = game_entity_dog_retreiver_state.search;
-                    dog.position = dog.dog_retriever.player_target_position;
                 }
 
                 // balance team counts
@@ -950,7 +945,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 var client game_client_connection ref;
                 while next_client(server, client ref)
                 {
-                    var team_index = client.capture_the_flag_team_index;
+                    var player = get(server.game ref, client.entity_id);
+                    var team_index = player.player.team_index;
 
                     var color rgba8;
                     if team_index < capture_the_flag_team_colors.count
@@ -962,15 +958,14 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         else
                         {
                             team_index = u32_invalid_index;
-                            client.capture_the_flag_team_index = u32_invalid_index;
+                            player.player.team_index = u32_invalid_index;
                         }
                     }
 
                     if team_index < capture_the_flag_team_colors.count
-                    {
                         color = capture_the_flag_team_colors[team_index];
-                        color.a = 255;
-                    }
+
+                    player.player.team_color = color;
 
                     var message network_message_union;
                     message.tag = network_message_tag.capture_the_flag_player_team;
@@ -990,6 +985,13 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     var message network_message_union;
                     message.tag = network_message_tag.capture_the_flag_started;
                     queue(server, message);
+
+                    loop var team_index u32; 2
+                    {
+                        var dog = get(server.game ref, capture_the_flag.dog_id[team_index]);
+                        dog.dog_retriever.state = game_entity_dog_retreiver_state.search;
+                        dog.position = dog.dog_retriever.player_target_position;
+                    }
                 }
             }
         }
@@ -1218,7 +1220,6 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
         }
     }
 
-
     {
         var client game_client_connection ref;
         while next_client(server, client ref)
@@ -1240,7 +1241,11 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 {
                     // healed by waiting out the timer
                     if user.knockdown_timeout <= 0
+                    {
                         entity.health = maximum(1, entity.max_health / 5);
+                        entity.health = maximum(entity.health, entity.player.healed_health_while_knocked_down);
+                        entity.health = minimum(entity.health, entity.max_health);
+                    }
 
                     user.knockdown_timeout = 0;
                     user.is_knockdowned = false;
@@ -1260,6 +1265,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 {
                     user.knockdown_timeout = max_user_knockdown_time;
                     user.is_knockdowned = true;
+                    entity.player.healed_health_while_knocked_down = 0;
                     game.do_update_tick_count[entity_index] = 2;
                 }
             }
