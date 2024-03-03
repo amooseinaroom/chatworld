@@ -8,6 +8,7 @@ def debug_player_server_position = false;
 def game_title = "chatworld client";
 
 // override def network_print_max_level = network_print_level.count;
+override def network_print_max_level = network_print_level.info;
 
 struct program_state
 {
@@ -862,14 +863,14 @@ func game_update program_update_type
                 var player_box = draw_player(ui, position, tile_size, tile_offset, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction, entity.health is 0);
                 draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), player.name_color);
 
-                if show_capture_the_flag_team_color and (player.capture_the_flag_team_index < 2)
+                if show_capture_the_flag_team_color and (entity.player.team_index < 2)
                 {
                     var pivot = get_point(player_box, [ 0.5, 0.7 ] vec2);
                     var box box2;
                     var half_size = ceil(tile_size * 0.125);
                     box.min = pivot - half_size;
                     box.max = box.min + (half_size * 2);
-                    draw_box(ui, game_render_layer.entity + 1, player.capture_the_flag_team_color, box);
+                    draw_box(ui, game_render_layer.entity + 1, entity.player.team_color, box);
                 }
 
                 if player.chat_message_timeout > 0
@@ -1046,6 +1047,16 @@ func game_update program_update_type
                     var color = [ 240, 10, 240, 255 ] rgba8;
                     draw_box(ui, game_render_layer.entity, color, box);
                     draw_box(ui, game_render_layer.entity + 1, entity.flag.team_color, grow(box, -ceil(tile_size * 0.1)));
+                }
+                case game_entity_tag.dog_retriever
+                {
+                    var box box2;
+                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
+                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
+
+                    var color = [ 240, 240, 20, 255 ] rgba8;
+                    draw_box(ui, game_render_layer.entity, color, box);
+                    draw_box(ui, game_render_layer.entity + 1, entity.dog_retriever.team_color, grow(box, -ceil(tile_size * 0.1)));
                 }
                 case game_entity_tag.player_tent
                 {

@@ -51,6 +51,16 @@ func is_not(left game_entity_network_id, right game_entity_network_id) (ok b8)
     return left.value is_not right.value;
 }
 
+func is(left game_entity_id, right game_entity_id) (ok b8)
+{
+    return left.value is right.value;
+}
+
+func is_not(left game_entity_id, right game_entity_id) (ok b8)
+{
+    return left.value is_not right.value;
+}
+
 // COMPILER BUG: somehow sets the type to u8
 def max_entity_count = (1 bit_shift_left 14) cast(u32);
 
@@ -117,6 +127,9 @@ struct game_entity
             fireball_id          game_entity_id;
             sword_swing_progress f32;
 
+            team_index u32;
+            team_color rgba8;
+
             // send back to client, for better prediction
             movement_speed f32;
         };
@@ -132,8 +145,30 @@ struct game_entity
         {
             team_index u32;
             team_color rgba8;
-        }
+        };
+
+        dog_retriever struct
+        {
+            pick_id                game_entity_id;
+            // flag_id                game_entity_id;
+            player_target_position vec2;
+            flag_target_position   vec2;
+            target_position        vec2;
+            team_index             u32;
+            team_color             rgba8;
+
+            state game_entity_dog_retreiver_state;
+        };
     };
+}
+
+enum game_entity_dog_retreiver_state u8
+{
+    sleep;
+    search;
+        pick_flag;
+        pick_player;
+    deliver;
 }
 
 struct game_entity_player_tent
@@ -147,11 +182,12 @@ enum game_entity_tag u8
 {
     none;
     player;
-    player_tent;    
+    player_tent;
     hitbox;
     chicken;
     flag;
     flag_target;
+    dog_retriever;
     healing_altar;
 }
 
@@ -284,6 +320,21 @@ func add_flag_target(game game_state ref, network_id game_entity_network_id, pos
     return id;
 }
 
+func add_dog_retriever(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8, player_target_position vec2, flag_target_position vec2) (id game_entity_id)
+{
+    var id = add(game, game_entity_tag.dog_retriever, network_id);
+
+    var entity = get(game, id);
+    entity.collider = { {} vec2, 0.33 } sphere2;
+    entity.position = position;
+    entity.dog_retriever.team_index = team_index;
+    entity.dog_retriever.team_color = team_color;
+    entity.dog_retriever.player_target_position = player_target_position;
+    entity.dog_retriever.flag_target_position   = flag_target_position;
+
+    return id;
+}
+
 var global debug_game_is_inside_update = false;
 
 func remove(game game_state ref, id game_entity_id)
@@ -368,8 +419,15 @@ func update(game game_state ref, delta_seconds f32)
 
         var entity = game.entity[i] ref;
         var drag_parent = get(game, entity.drag_parent_id);
-        if not drag_parent or not drag_parent.health
+        if not drag_parent
             continue;
+
+        if not drag_parent.health
+        {
+            drag_parent.drag_child_id = {} game_entity_id;
+            entity.drag_parent_id = {} game_entity_id;
+            continue;
+        }
 
         var position = entity.position + entity.collider.center;
         var parent_position = drag_parent.position + drag_parent.collider.center;
@@ -530,7 +588,7 @@ func update(game game_state ref, delta_seconds f32)
             }
         }
         case game_entity_tag.chicken
-        {        
+        {
             var chicken = entity.chicken ref;
 
             if not is_dead
@@ -602,8 +660,8 @@ func update(game game_state ref, delta_seconds f32)
             }
         }
         case game_entity_tag.flag_target
-        {            
-            var target = entity.flag_target ref;                            
+        {
+            var target = entity.flag_target ref;
             var position = entity.position + entity.collider.center;
             var radius   = entity.collider.radius;
 
@@ -618,7 +676,7 @@ func update(game game_state ref, delta_seconds f32)
                 var other = game.entity[other_index] ref;
                 if other.flag.team_index is team_index
                     continue;
-        
+
                 // only score if not dragged
                 if get(game, other.drag_parent_id)
                     continue;
@@ -628,8 +686,147 @@ func update(game game_state ref, delta_seconds f32)
                 if squared_length(other_position - position) > (max_distance * max_distance)
                     continue;
 
-                remove_next_tick(game, { other_index + 1, game.generation[other_index] } game_entity_id);   
-                target.has_scored_flag = true;             
+                remove_next_tick(game, { other_index + 1, game.generation[other_index] } game_entity_id);
+                target.has_scored_flag = true;
+            }
+        }
+        case game_entity_tag.dog_retriever
+        {
+            var retriever = entity.dog_retriever ref;
+            var position = entity.position + entity.collider.center;
+            var radius   = entity.collider.radius;
+
+            var retriever_id = { i + 1, game.generation[i] } game_entity_id;
+
+            switch retriever.state
+            case game_entity_dog_retreiver_state.sleep
+            {
+                // noting to do
+            }
+            case game_entity_dog_retreiver_state.search
+            {
+                var target_mask = bit64(game_entity_tag.flag) bit_or bit64(game_entity_tag.player);
+                var team_index = retriever.team_index;
+
+                var closest_distance_squared = 10000.0;
+                var closest_entiy_index = u32_invalid_index;
+                var closest_entiy_is_player = false;
+
+                loop var other_index u32; game.entity.count
+                {
+                    if not (bit64(game.tag[other_index]) bit_and target_mask) or game.do_delete[other_index]
+                        continue;
+
+                    var other = game.entity[other_index] ref;
+
+                    if other.health
+                        continue;
+
+                    if get(game, other.drag_parent_id)
+                        continue;
+
+                    var other_team_index u32;
+                    switch game.tag[other_index]
+                    case game_entity_tag.flag
+                    {
+                        other_team_index = other.flag.team_index;
+                    }
+                    case game_entity_tag.player
+                    {
+                        other_team_index = other.player.team_index;
+                    }
+
+                    if other_team_index is_not team_index
+                        continue;
+
+                    var other_position = other.position + other.collider.center;
+                    var distance_squared = squared_length(other_position - position);
+                    if closest_distance_squared < distance_squared
+                        continue;
+
+                    closest_distance_squared = distance_squared;
+                    closest_entiy_index = other_index;
+
+                    // prioritize players
+                    if game.tag[other_index] is game_entity_tag.player
+                    {
+                        closest_entiy_is_player = true;
+                        target_mask = bit64(game_entity_tag.player);
+                    }
+                }
+
+                if closest_entiy_index is_not u32_invalid_index
+                {
+                    if closest_entiy_is_player
+                    {
+                        retriever.state = game_entity_dog_retreiver_state.pick_player;
+                        retriever.target_position = retriever.player_target_position;
+                    }
+                    else
+                    {
+                        retriever.state = game_entity_dog_retreiver_state.pick_flag;
+                        retriever.target_position = retriever.flag_target_position;
+                    }
+
+                    retriever.pick_id = { closest_entiy_index + 1, game.generation[closest_entiy_index] } game_entity_id;
+                }
+            }
+            case game_entity_dog_retreiver_state.pick_flag, game_entity_dog_retreiver_state.pick_player
+            {
+                var pick_target = get(game, retriever.pick_id);
+                if not pick_target or pick_target.health or get(game, pick_target.drag_parent_id)
+                {
+                    retriever.pick_id = {} game_entity_id;
+                    retriever.state = game_entity_dog_retreiver_state.search;
+                    break;
+                }
+
+                def movement_speed = 8.0;
+                var max_distance = movement_speed * delta_seconds;
+                var movement = pick_target.position + pick_target.collider.center - position;
+                if squared_length(movement) > (max_distance * max_distance)
+                {
+                    movement = normalize(movement) * max_distance;
+                }
+                else
+                {
+                   assert(not get(game, pick_target.drag_parent_id));
+                    pick_target.drag_parent_id = retriever_id;
+                    entity.drag_child_id       = retriever.pick_id;
+                    retriever.pick_id          = {} game_entity_id;
+                    retriever.state = game_entity_dog_retreiver_state.deliver;
+                }
+
+                entity.position += entity.movement + movement;
+            }
+            case game_entity_dog_retreiver_state.deliver
+            {
+                var drag_target = get(game, entity.drag_child_id);
+                if not drag_target
+                {
+                    retriever.state = game_entity_dog_retreiver_state.search;
+                    break;
+                }
+
+                assert(drag_target.drag_parent_id is retriever_id);
+
+                def movement_speed = 8.0;
+                var max_distance = movement_speed * delta_seconds;
+                var movement = retriever.target_position - position;
+                if squared_length(movement) > (max_distance * max_distance)
+                    movement = normalize(movement) * max_distance;
+                else
+                {
+                    drag_target.drag_parent_id = {} game_entity_id;
+                    entity.drag_child_id       = {} game_entity_id;
+                    retriever.state = game_entity_dog_retreiver_state.search;
+                }
+
+                entity.position += entity.movement + movement;
+            }
+            else
+            {
+                assert(0);
             }
         }
         else

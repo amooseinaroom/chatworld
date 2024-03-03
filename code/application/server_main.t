@@ -124,12 +124,13 @@ shutdown(server, network);
 func shutdown(server game_server ref, network platform_network ref)
 {
     // disconnect all clients
-    loop var i u32; server.client_count
+    var client game_client_connection ref;
+    while next_client(server, client ref)
     {
         var message network_message_union;
         message.tag = network_message_tag.login_reject;
         message.login_reject.reason = network_message_reject_reason.server_disconnect;
-        send(network, message, server.socket, server.clients[i].address);
+        send(network, message, server.socket ref, client.address);
     }
 
     platform_network_shutdown(network);

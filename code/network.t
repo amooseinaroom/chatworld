@@ -18,6 +18,7 @@ enum network_print_level
 {
     crucial;
     info;
+    verbose;
 }
 
 // essentially network_print_crucial
@@ -30,6 +31,12 @@ func network_print print_type
 func network_print_info print_type
 {
     if enable_network_print and (network_print_level.info <= network_print_max_level)
+        print_line(format, values);
+}
+
+func network_print_verbose print_type
+{
+    if enable_network_print and (network_print_level.verbose <= network_print_max_level)
         print_line(format, values);
 }
 
@@ -229,35 +236,37 @@ type network_message_union union
     capture_the_flag_player_team network_message_capture_the_flag_player_team;
 };
 
-func send(network platform_network ref, message network_message_union, send_socket platform_network_socket, address = {} platform_network_address)
+func send(network platform_network ref, message network_message_union, send_socket platform_network_socket ref, address = {} platform_network_address) (ok b8)
 {
     var data = value_to_u8_array(message);
-    var ok = platform_network_send(network, send_socket, address, data, platform_network_timeout_milliseconds_zero);
-    assert(ok);
+    var ok = platform_network_send(network, send_socket deref, address, data, platform_network_timeout_milliseconds_zero);
+    network_assert(ok);
+    // platform_network_unbind(network, send_socket);
+
+    return ok;
 }
 
-func receive(network platform_network ref, receive_socket platform_network_socket) (ok b8, message network_message_union, address platform_network_address)
+func receive(network platform_network ref, receive_socket platform_network_socket) (do_continue b8, has_message b8, message network_message_union, address platform_network_address)
 {
     var message network_message_union;
     var buffer = value_to_u8_array(message);
     var buffer_used_byte_count usize;
     var result = platform_network_receive(network, receive_socket, buffer, buffer_used_byte_count ref, platform_network_timeout_milliseconds_zero);
+    network_assert(result.ok);
 
-    // we don't have connections that could fail, but win32 will indicate if a udp "connection" is lost running locally
-    if not result.ok
-        return false, message, {} platform_network_address;
+    if not buffer_used_byte_count
+        return result.has_data, false, {} network_message_union, {} platform_network_address;
 
     if buffer_used_byte_count is_not type_byte_count(network_message_union)
-        return false, message, {} platform_network_address;
+        return result.has_data, false, {} network_message_union, {} platform_network_address;
 
     if message.tag >= network_message_tag.count
-        return false, message, {} platform_network_address;
+        return result.has_data, false, {} network_message_union, {} platform_network_address;
 
-    return buffer_used_byte_count > 0, message, result.address;
+    return result.has_data, true, message, result.address;
 }
 
 type game_user_sprite rgba8[256 * 128];
-
 
 func load_server_address(platform platform_api ref, network platform_network ref, tmemory memory_arena ref, default_address platform_network_address) (address platform_network_address)
 {
@@ -274,7 +283,7 @@ func load_server_address(platform platform_api ref, network platform_network ref
     while it.count
     {
         if not try_skip(it ref, "server")
-            assert(false);
+            network_assert(false);
 
         skip_space(it ref);
 
@@ -286,12 +295,12 @@ func load_server_address(platform platform_api ref, network platform_network ref
             {
                 var value u32;
                 if not try_parse_u32(value ref, it ref) or (value > 255)
-                    assert(false);
+                    network_assert(false);
 
                 server_ip[i] = value cast(u8);
 
                 if (i < 3) and not try_skip(it ref, ".")
-                    assert(false);
+                    network_assert(false);
             }
 
             skip_space(it ref);
@@ -300,13 +309,13 @@ func load_server_address(platform platform_api ref, network platform_network ref
         {
             skip_space(it ref);
             dns = try_skip_until_set(it ref, " \t\n\r");
-            assert(dns.count);
+            network_assert(dns.count);
         }
         else
-            assert(false);
+            network_assert(false);
 
         if not try_parse_u32(port ref, it ref) or (port > 65535)
-            assert(false);
+            network_assert(false);
 
         skip_space(it ref);
         break;
@@ -328,6 +337,7 @@ func load_server_address(platform platform_api ref, network platform_network ref
     return address;
 }
 
+// overridden in server
 func network_assert assert_type
 {
     assert(condition_text, condition, location, format, arguments);
