@@ -296,7 +296,7 @@ func game_init program_init_type
     }
 
     // loop var i; lang_global_variables.count
-    // {        
+    // {
     //     var variable = lang_global_variables[i];
     //     print("global %\n", variable.name);
     // }
@@ -361,7 +361,7 @@ func game_update program_update_type
     var menu = state.menu ref;
     menu.ui = ui;
     menu.characters = { platform.character_count, platform.character_buffer.base } platform_character[];
-    
+
     var game = client.game ref;
 
     var tiles_per_width = 20;
@@ -370,7 +370,7 @@ func game_update program_update_type
 
     var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
 
-    {        
+    {
         var context = { ui.viewport_size, tile_offset, v2(tile_size) } render_2d_context;
         frame(render, context, tmemory);
     }
@@ -492,7 +492,7 @@ func game_update program_update_type
     {
         if client.reject_reason is_not 0
             print(ui, 10, font, cursor ref, "Server rejected connection: %\n", client.reject_reason);
-        else if client.reconnect_count
+        else if client.pending_messages.resend_count_without_replies
             print(ui, 10, font, cursor ref, "Server is not responding, it may be offline\n");
 
         draw_box(ui, -1000, menu_color_background, ui.scissor_box);
@@ -657,7 +657,9 @@ func game_update program_update_type
 
         if client.state is client_state.connecting
         {
-            var text_color = [ 255, 255, 255, (sin(client.reconnect_timeout * 2 * pi32) * 0.5 + 0.5 * 255) cast(u8) ] rgba8;
+            var global animation_time f32;
+            animation_time = fmod(animation_time + platform.delta_seconds, 1.0);
+            var text_color = [ 255, 255, 255, (sin(animation_time * 2 * pi32) * 0.5 + 0.5 * 255) cast(u8) ] rgba8;
             print(ui, 10, text_color, font, cursor ref, "Connecting to Server %.%.%.%:%", client.server_address.ip[0], client.server_address.ip[1], client.server_address.ip[2], client.server_address.ip[3], client.server_address.port);
         }
 
@@ -681,7 +683,7 @@ func game_update program_update_type
 
             if client.is_admin
                 print(ui, 10, font, cursor ref, "Admin User");
-            
+
             // update(platform, state);
 
             var player = client.players[0] ref;
@@ -784,43 +786,63 @@ func game_update program_update_type
 
             // update(game, platform.delta_seconds);
 
-            // TEST render_2d            
-            {                                
+            // TEST render_2d
+            if false
+            {
                 var texture_box box2;
                 texture_box.max = [ 128, 128 ] vec2;
 
                 var position = get_y_sorted_position(render, client.local_player_position);
                 // { , v2(0.5) } render_2d_position;
-                draw_texture_box(render, position, v2(1.0), [ 1, 0, 0, 1 ] vec4, {} render_2d_texture, texture_box);                             
+                draw_texture_box(render, position, v2(1.0), [ 1, 0, 0, 1 ] vec4, {} render_2d_texture, texture_box);
 
                 position = get_y_sorted_position(render, { 4, 4 } vec2);
                 // { , v2(0.5) } render_2d_position;
-                draw_texture_box(render, position, v2(1.0), [ 0, 1, 0, 1 ] vec4, {} render_2d_texture, texture_box);                             
+                draw_texture_box(render, position, v2(1.0), [ 0, 1, 0, 1 ] vec4, {} render_2d_texture, texture_box);
 
-                position = get_y_sorted_position(render, client.local_player_position - [ 0, 0.01 ] vec2);                                
-                draw_circle(render, position.pivot + [ 0, 1 ] vec2, 0.5, position.depth, [ 1, 1, 0, 0.5 ] vec4);                             
-            }                            
-            
+                position = get_y_sorted_position(render, client.local_player_position - [ 0, 0.01 ] vec2);
+                draw_circle(render, position.pivot + [ 0, 1 ] vec2, 0.5, position.depth, [ 1, 1, 0, 0.5 ] vec4);
+
+                loop var y; game_world_size.y
+                {
+                    loop var x; game_world_size.x
+                    {
+                        var box box2;
+                        box.min = [ x, y ] vec2;
+                        box.max = box.min + 1;
+                        var colors = [
+                            [ 0.5, 0.1, 0.1, 1.0 ] vec4,
+                            [ 0.1, 0.1, 0.5, 1.0 ] vec4,
+                        ] vec4[];
+
+                        var color = colors[(x + y) bit_and 1];
+
+                        var position = { [ x, y ] vec2, {} vec2, 0.99 } render_2d_position;
+                        draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
+                    }
+                }
+
+                break client_online;
+            }
+
+            // TODO: OLD RENDERER TO BE REPLACED
+
             loop var y; game_world_size.y
             {
                 loop var x; game_world_size.x
                 {
                     var box box2;
-                    box.min = [ x, y ] vec2;
-                    box.max = box.min + 1;
+                    box.min = floor([ x, y ] vec2 * tile_size + tile_offset);
+                    box.max = ceil(box.min + tile_size);
                     var colors = [
-                        [ 0.5, 0.1, 0.1, 1.0 ] vec4,
-                        [ 0.1, 0.1, 0.5, 1.0 ] vec4,
-                    ] vec4[];
+                        [ 127, 25, 25, 255 ] rgba8,
+                        [ 25, 25, 127, 255 ] rgba8,
+                    ] rgba8[];
 
                     var color = colors[(x + y) bit_and 1];
-                    
-                    var position = { [ x, y ] vec2, {} vec2, 0.99 } render_2d_position;
-                    draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
+                    draw_box(ui, game_render_layer.ground, color, box);
                 }
             }
-
-            break client_online;
 
             var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
 
@@ -1019,7 +1041,7 @@ func game_update program_update_type
                 {
                     var box box2;
                     box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));                    
+                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
 
                     var color = [ 240, 10, 240, 255 ] rgba8;
                     draw_box(ui, game_render_layer.entity, color, box);
@@ -1055,7 +1077,7 @@ func game_update program_update_type
                     var box box2;
                     box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
                     box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-                    
+
                     draw_box(ui, game_render_layer.ground_overlay, entity.flag_target.team_color, box);
                 }
             }
@@ -1086,7 +1108,7 @@ func game_update program_update_type
 }
 
 override func game_render game_render_type
-{   
+{
     var tmemory = state.temporary_memory ref;
     var render = state.render_2d ref;
     execute(render, state.gl ref, tmemory);

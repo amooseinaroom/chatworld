@@ -3,6 +3,53 @@ import win32;
 import math;
 import gl;
 
+struct game_client
+{
+    expand persistant_state game_client_persistant_state;
+
+    game game_client_state;
+
+    pending_messages client_pending_network_message_buffer;
+
+    state client_state;
+    reject_reason network_message_reject_reason;
+
+    latency_milliseconds u32;
+
+    tick_send_timeout f32;
+
+    frame_input network_message_user_input;
+
+    players      game_player[max_player_count];
+    player_count u32;
+
+    is_admin b8;
+    do_shutdown_server b8;
+
+    chat_message_edit editable_text;
+    chat_message      network_message_chat_text;
+    send_chat_message b8;
+    is_chatting       b8;
+
+    entity_id         game_entity_id;
+    entity_network_id game_entity_network_id;
+
+    capture_the_flag struct
+    {
+        score u32[2];
+
+        running_id u32;
+        play_time  f32;
+        is_running b8;
+    };
+
+    heartbeat_timeout f32;
+
+    sprite_atlas gl_texture;
+
+    pending_sprite game_user_sprite;
+}
+
 struct game_client_persistant_state
 {
     socket platform_network_socket;
@@ -33,55 +80,6 @@ struct game_client_state
 func get(game game_client_state ref, id game_entity_id) (entity game_entity ref)
 {
     return get(game.base ref, id);
-}
-
-struct game_client
-{
-    expand persistant_state game_client_persistant_state;
-
-    game game_client_state;
-
-    pending_messages client_pending_network_message_buffer;
-
-    state client_state;
-    reconnect_timeout f32;
-    reconnect_count   u32;
-    reject_reason network_message_reject_reason;
-
-    latency_milliseconds u32;
-
-    tick_send_timeout f32;
-
-    frame_input network_message_user_input;
-
-    players      game_player[max_player_count];
-    player_count u32;
-
-    is_admin b8;
-    do_shutdown_server b8;
-
-    chat_message_edit editable_text;
-    chat_message      network_message_chat_text;
-    send_chat_message b8;
-    is_chatting       b8;
-
-    entity_id         game_entity_id;
-    entity_network_id game_entity_network_id;
-
-    capture_the_flag struct
-    {        
-        score u32[2];
-
-        running_id u32;
-        play_time  f32;
-        is_running b8;
-    };
-
-    heartbeat_timeout f32;
-
-    sprite_atlas gl_texture;
-
-    pending_sprite game_user_sprite;
 }
 
 type game_sprite_atlas_id union
@@ -242,7 +240,7 @@ enum client_state
 
 struct client_pending_network_message
 {
-    expand base    network_message_union;    
+    expand base    network_message_union;
     resend_timeout f32;
 }
 
@@ -268,7 +266,7 @@ func queue(client game_client ref, message network_message_union)
         buffer.next_acknowledge_message_id += 1;
 
     pending_message.base = message;
-    pending_message.base.acknowledge_message_id = buffer.next_acknowledge_message_id;    
+    pending_message.base.acknowledge_message_id = buffer.next_acknowledge_message_id;
 }
 
 func remove_acknowledge_message(client game_client ref, acknowledge_message_id u16, debug_tag network_message_tag)
@@ -278,7 +276,7 @@ func remove_acknowledge_message(client game_client ref, acknowledge_message_id u
     {
         var message = buffer[message_index] ref;
         if message.base.acknowledge_message_id is acknowledge_message_id
-        {                  
+        {
             network_print_info("Client: removed pending message % [%]", debug_tag, acknowledge_message_id);
             buffer.used_count -= 1;
             buffer[message_index] = buffer[buffer.used_count];
@@ -337,7 +335,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
         if result.address is_not client.server_address
             continue;
-        
+
         // debug drop messages sometimes
         if false
         {
@@ -358,7 +356,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
         switch result.message.tag
         case network_message_tag.acknowledge
-        {            
+        {
             remove_acknowledge_message(client, result.message.acknowledge_message_id, result.message.tag);
         }
         case network_message_tag.login_accept
@@ -497,8 +495,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             client.capture_the_flag.is_running = true;
         }
         case network_message_tag.capture_the_flag_ended
-        {   
-            client.capture_the_flag.play_time = 1 * 60.0; // time to fade score result         
+        {
+            client.capture_the_flag.play_time = 1 * 60.0; // time to fade score result
             client.capture_the_flag.is_running = false;
         }
         case network_message_tag.capture_the_flag_score
@@ -514,7 +512,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         case network_message_tag.capture_the_flag_player_team
         {
             var message = result.message.capture_the_flag_player_team;
-            
+
             var entity_id = find_network_entity(game, message.entity_network_id);
             assert(entity_id.value);
 
@@ -529,7 +527,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             message.tag                    = network_message_tag.acknowledge;
             message.acknowledge_message_id = result.message.acknowledge_message_id;
             network_print_info("Client: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
-            send(network, message, client.socket, client.server_address);   
+            send(network, message, client.socket, client.server_address);
         }
 
         network_print_info("Client: server message % %\n", result.message.tag, result.address);
@@ -608,14 +606,32 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             var message network_message_union;
             message.tag = network_message_tag.chat;
             message.chat.text        = client.chat_message;
-            send(network, message, client.socket, client.server_address);
-            reset_heartbeat = true;
+            queue(client, message);
         }
 
         client.frame_input = {} network_message_user_input;
     }
 
     client.send_chat_message = false;
+
+    // send pending_messages
+    {
+        var buffer = client.pending_messages ref;
+        loop var message_index u32; buffer.used_count
+        {
+            var message = buffer[message_index] ref;
+            message.resend_timeout -= delta_seconds * 2; // twice per second
+            if message.resend_timeout > 0
+                continue;
+
+            message.resend_timeout += 1;
+            buffer.resend_count_without_replies += 1;
+
+            network_print_info("Client: send % [%]", message.base.tag, message.base.acknowledge_message_id);
+            send(network, message.base, client.socket, client.server_address);
+            reset_heartbeat = true;
+        }
+    }
 
     if reset_heartbeat
     {
@@ -640,24 +656,6 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         message.tag = network_message_tag.latency;
         message.latency.latency_id = reply_latency_id;
         send(network, message, client.socket, client.server_address);
-    }
-
-    // send pending_messages
-    {
-        var buffer = client.pending_messages ref;
-        loop var message_index u32; buffer.used_count
-        {
-            var message = buffer[message_index];
-            message.resend_timeout -= delta_seconds * 2; // twice per second
-            if message.resend_timeout > 0
-                continue;
-
-            message.resend_timeout += 1;
-            buffer.resend_count_without_replies += 1;
-                            
-            network_print_info("Client: send % [%]", message.base.tag, message.base.acknowledge_message_id);
-            send(network, message.base, client.socket, client.server_address);
-        }
     }
 }
 
