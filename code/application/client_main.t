@@ -652,7 +652,18 @@ func game_update program_update_type
     else
     {
         if state.is_host
+        {            
             tick(platform, state.server ref, state.network ref, platform.delta_seconds);
+
+            var client game_client_connection ref;
+            while next_client(state.server ref, client ref)
+            {
+                var buffer = client.send_buffer;
+                var client_index = (client - state.server.clients.base) cast(u32);
+
+                print(ui, 10, name_color, font, cursor ref, "client %, compress zero: packet_count: % [% bytes], compressed_packet_count: % [% bytes], compress packet rate: % [% bytes]\n", client_index, buffer.packet_count, buffer.byte_count, buffer.compressed_packet_count, buffer.compressed_byte_count,test_compress_zero_buffer.compressed_packet_count * 100.0 / buffer.packet_count, buffer.compressed_byte_count * 100.0 / buffer.byte_count);
+            }
+        }    
 
         tick(client, state.network ref, platform.delta_seconds);
 

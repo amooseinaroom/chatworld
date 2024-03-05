@@ -11,6 +11,8 @@ struct game_client
 
     pending_messages client_pending_network_message_buffer;
 
+    send_buffer network_send_buffer;
+
     state client_state;
     reject_reason network_message_reject_reason;
 
@@ -333,7 +335,8 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
     while true
     {
-        var result = receive(network, client.socket);
+        var receive_buffer u8[network_max_packet_size];
+        var result = receive(network, client.socket, receive_buffer);
         if not result.do_continue
             break;
 
@@ -343,202 +346,206 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         if result.address is_not client.server_address
             continue;
 
-        // debug drop messages sometimes
-        if false
+        var received_message network_message_union;
+        while next_message(received_message ref, result.iterator ref)
         {
-            if result.message.acknowledge_message_id is_not network_acknowledge_message_id_invalid
+
+            // debug drop messages sometimes
+            if false
             {
-                var global throw_index u32;
-                throw_index = (throw_index + 1) mod 5;
-                if not throw_index
+                if received_message.acknowledge_message_id is_not network_acknowledge_message_id_invalid
                 {
-                    network_print_info("Client: dropped message % [%]", result.message.tag, result.message.acknowledge_message_id);
-                    continue;
+                    var global throw_index u32;
+                    throw_index = (throw_index + 1) mod 5;
+                    if not throw_index
+                    {
+                        network_print_info("Client: dropped message % [%]", received_message.tag, received_message.acknowledge_message_id);
+                        continue;
+                    }
                 }
             }
-        }
 
-        // received a life sign from server
-        client.pending_messages.resend_count_without_replies = 0;
+            // received a life sign from server
+            client.pending_messages.resend_count_without_replies = 0;
 
-        switch result.message.tag
-        case network_message_tag.acknowledge
-        {
-            remove_acknowledged_message(client, result.message.acknowledge_message_id, result.message.tag);
-        }
-        case network_message_tag.login_accept
-        {
-            remove_acknowledged_message(client, result.message.acknowledge_message_id, result.message.tag);
-
-            if client.state is_not client_state.connecting
-                break;
-
-            var message = result.message.login_accept;
-            client.entity_network_id = message.player_entity_network_id;
-            client.state = client_state.online;
-
-            // adding a player here is a bit redundant and needs to be the same as in
-            // add_player message
-
-            client.player_count = 0;
-
-            var player = find_or_add_player(client, client.entity_network_id).player;
-            assert(player);
-
-            client.is_admin = message.is_admin;
-
-            // will be filled out by add_player message
-            // player.name = client.user_name;
-            // player.name_color = to_rgba8(client.name_color.color);
-            // player.body_color = to_rgba8(client.body_color.color);
-            // player.entity_network_id = client.entity_network_id;
-        }
-        case network_message_tag.login_reject
-        {
-            remove_acknowledged_message(client, result.message.acknowledge_message_id, result.message.tag);
-
-            client.state = client_state.disconnected;
-            client.reject_reason = result.message.login_reject.reason;
-        }
-        case network_message_tag.add_player
-        {
-            if client.state is_not client_state.online
-                break;
-
-            var message = result.message.add_player;
-            var player = find_or_add_player(client, message.entity_network_id).player;
-
-            if not player
+            switch received_message.tag
+            case network_message_tag.acknowledge
             {
-                network_print("Client: rejected add player");
-                break;
+                remove_acknowledged_message(client, received_message.acknowledge_message_id, received_message.tag);
+            }
+            case network_message_tag.login_accept
+            {
+                remove_acknowledged_message(client, received_message.acknowledge_message_id, received_message.tag);
+
+                if client.state is_not client_state.connecting
+                    break;
+
+                var message = received_message.login_accept;
+                client.entity_network_id = message.player_entity_network_id;
+                client.state = client_state.online;
+
+                // adding a player here is a bit redundant and needs to be the same as in
+                // add_player message
+
+                client.player_count = 0;
+
+                var player = find_or_add_player(client, client.entity_network_id).player;
+                assert(player);
+
+                client.is_admin = message.is_admin;
+
+                // will be filled out by add_player message
+                // player.name = client.user_name;
+                // player.name_color = to_rgba8(client.name_color.color);
+                // player.body_color = to_rgba8(client.body_color.color);
+                // player.entity_network_id = client.entity_network_id;
+            }
+            case network_message_tag.login_reject
+            {
+                remove_acknowledged_message(client, received_message.acknowledge_message_id, received_message.tag);
+
+                client.state = client_state.disconnected;
+                client.reject_reason = received_message.login_reject.reason;
+            }
+            case network_message_tag.add_player
+            {
+                if client.state is_not client_state.online
+                    break;
+
+                var message = received_message.add_player;
+                var player = find_or_add_player(client, message.entity_network_id).player;
+
+                if not player
+                {
+                    network_print("Client: rejected add player");
+                    break;
+                }
+
+                player.name              = message.name;
+                player.name_color        = message.name_color;
+                player.body_color        = message.body_color;
+            }
+            case network_message_tag.remove_player
+            {
+                if client.state is_not client_state.online
+                    break;
+
+                var message = received_message.remove_player;
+
+                var entity_id = find_network_entity(game, message.entity_network_id);
+                var result = find_player(client, entity_id);
+                if result.player
+                {
+                    remove(game, entity_id);
+                    client.player_count -= 1;
+                    client.players[result.index] = client.players[client.player_count];
+                }
+            }
+            case network_message_tag.update_entity
+            {
+                if client.state is_not client_state.online
+                    break;
+
+                var message = received_message.update_entity;
+
+                var entity_id = find_network_entity(game, message.network_id);
+                if not entity_id.value
+                    entity_id = add(game, message.tag, message.network_id);
+
+                var entity = get(game, entity_id);
+                entity deref = message.entity;
+            }
+            case network_message_tag.delete_entity
+            {
+                if client.state is_not client_state.online
+                    break;
+
+                var message = received_message.delete_entity;
+
+                var entity_id = find_network_entity(game, message.network_id);
+                if entity_id.value
+                    remove_for_real(game, entity_id);
+            }
+            case network_message_tag.update_player_tent
+            {
+                if client.state is_not client_state.online
+                    break;
+
+                var message = received_message.update_player_tent;
+                var entity_id = find_network_entity(game, message.entity_network_id);
+                if not entity_id.value
+                    break;
+
+                game.player_tent[entity_id.index_plus_one - 1] = message.player_tent;
+
+            }
+            case network_message_tag.chat
+            {
+                if client.state is_not client_state.online
+                    break;
+
+                var message = received_message.chat;
+
+                var entity_id = find_network_entity(game, message.player_entity_network_id);
+                var player = find_player(client, entity_id).player;
+                if player
+                {
+                    player.chat_message = message.text;
+                    player.chat_message_timeout = 1;
+                }
+            }
+            case network_message_tag.latency
+            {
+                assert(received_message.latency.latency_id is_not invalid_latency_id);
+
+                client.latency_milliseconds = received_message.latency.latency_milliseconds;
+                reply_latency_id = received_message.latency.latency_id;
+            }
+            case network_message_tag.capture_the_flag_started
+            {
+                clear_value(client.capture_the_flag ref);
+                client.capture_the_flag.is_running = true;
+            }
+            case network_message_tag.capture_the_flag_ended
+            {
+                client.capture_the_flag.play_time = 1 * 60.0; // time to fade score result
+                client.capture_the_flag.is_running = false;
+            }
+            case network_message_tag.capture_the_flag_score
+            {
+                var message = received_message.capture_the_flag_score;
+                if message.running_id > client.capture_the_flag.running_id
+                {
+                    client.capture_the_flag.score[message.team_index] = message.score;
+                    client.capture_the_flag.play_time = message.play_time;
+                    client.capture_the_flag.running_id = message.running_id;
+                }
+            }
+            case network_message_tag.capture_the_flag_player_team
+            {
+                var message = received_message.capture_the_flag_player_team;
+
+                var entity_id = find_network_entity(game, message.entity_network_id);
+                if entity_id.value
+                {
+                    var player = get(game, entity_id);
+                    player.player.team_index = message.team_index;
+                    player.player.team_color = message.team_color;
+                }
             }
 
-            player.name              = message.name;
-            player.name_color        = message.name_color;
-            player.body_color        = message.body_color;
-        }
-        case network_message_tag.remove_player
-        {
-            if client.state is_not client_state.online
-                break;
-
-            var message = result.message.remove_player;
-
-            var entity_id = find_network_entity(game, message.entity_network_id);
-            var result = find_player(client, entity_id);
-            if result.player
+            if received_message.tag is_not network_message_tag.acknowledge and (received_message.acknowledge_message_id is_not network_acknowledge_message_id_invalid)
             {
-                remove(game, entity_id);
-                client.player_count -= 1;
-                client.players[result.index] = client.players[client.player_count];
+                var message network_message_union;
+                message.tag                    = network_message_tag.acknowledge;
+                message.acknowledge_message_id = received_message.acknowledge_message_id;
+                network_print_info("Client: acknowledged % [%]", received_message.tag, received_message.acknowledge_message_id);
+
+                send(network, client, message);
             }
+
+            network_print_verbose("Client: server message % %\n", received_message.tag, result.address);
         }
-        case network_message_tag.update_entity
-        {
-            if client.state is_not client_state.online
-                break;
-
-            var message = result.message.update_entity;
-
-            var entity_id = find_network_entity(game, message.network_id);
-            if not entity_id.value
-                entity_id = add(game, message.tag, message.network_id);
-
-            var entity = get(game, entity_id);
-            entity deref = message.entity;
-        }
-        case network_message_tag.delete_entity
-        {
-            if client.state is_not client_state.online
-                break;
-
-            var message = result.message.delete_entity;
-
-            var entity_id = find_network_entity(game, message.network_id);
-            if entity_id.value
-                remove_for_real(game, entity_id);
-        }
-        case network_message_tag.update_player_tent
-        {
-            if client.state is_not client_state.online
-                break;
-
-            var message = result.message.update_player_tent;
-            var entity_id = find_network_entity(game, message.entity_network_id);
-            if not entity_id.value
-                break;
-
-            game.player_tent[entity_id.index_plus_one - 1] = message.player_tent;
-
-        }
-        case network_message_tag.chat
-        {
-            if client.state is_not client_state.online
-                break;
-
-            var message = result.message.chat;
-
-            var entity_id = find_network_entity(game, message.player_entity_network_id);
-            var player = find_player(client, entity_id).player;
-            if player
-            {
-                player.chat_message = message.text;
-                player.chat_message_timeout = 1;
-            }
-        }
-        case network_message_tag.latency
-        {
-            assert(result.message.latency.latency_id is_not invalid_latency_id);
-
-            client.latency_milliseconds = result.message.latency.latency_milliseconds;
-            reply_latency_id = result.message.latency.latency_id;
-        }
-        case network_message_tag.capture_the_flag_started
-        {
-            clear_value(client.capture_the_flag ref);
-            client.capture_the_flag.is_running = true;
-        }
-        case network_message_tag.capture_the_flag_ended
-        {
-            client.capture_the_flag.play_time = 1 * 60.0; // time to fade score result
-            client.capture_the_flag.is_running = false;
-        }
-        case network_message_tag.capture_the_flag_score
-        {
-            var message = result.message.capture_the_flag_score;
-            if message.running_id > client.capture_the_flag.running_id
-            {
-                client.capture_the_flag.score[message.team_index] = message.score;
-                client.capture_the_flag.play_time = message.play_time;
-                client.capture_the_flag.running_id = message.running_id;
-            }
-        }
-        case network_message_tag.capture_the_flag_player_team
-        {
-            var message = result.message.capture_the_flag_player_team;
-
-            var entity_id = find_network_entity(game, message.entity_network_id);
-            if entity_id.value
-            {
-                var player = get(game, entity_id);
-                player.player.team_index = message.team_index;
-                player.player.team_color = message.team_color;
-            }
-        }
-
-        if result.message.tag is_not network_message_tag.acknowledge and (result.message.acknowledge_message_id is_not network_acknowledge_message_id_invalid)
-        {
-            var message network_message_union;
-            message.tag                    = network_message_tag.acknowledge;
-            message.acknowledge_message_id = result.message.acknowledge_message_id;
-            network_print_info("Client: acknowledged % [%]", result.message.tag, result.message.acknowledge_message_id);
-
-            if not send(network, client, message)
-                return;
-        }
-
-        network_print_verbose("Client: server message % %\n", result.message.tag, result.address);
     }
 
     switch client.state
@@ -577,9 +584,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
             var message network_message_union;
             message.user_input = client.frame_input;
             message.tag = network_message_tag.user_input; // frame_input has no tag set
-
-            if not send(network, client, message)
-                return;
+            send(network, client, message);
 
             reset_heartbeat = true;
         }
@@ -612,8 +617,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
             network_print_info("Client: send % [%]", message.base.tag, message.base.acknowledge_message_id);
 
-            if not send(network, client, message.base)
-                return;
+            send(network, client, message.base);
 
             reset_heartbeat = true;
         }
@@ -632,8 +636,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
             var message network_message_union;
             message.tag = network_message_tag.heartbeat;
-            if not send(network, client, message)
-                return;
+            send(network, client, message);
         }
     }
 
@@ -643,9 +646,10 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         message.tag = network_message_tag.latency;
         message.latency.latency_id = reply_latency_id;
 
-        if not send(network, client, message)
-            return;
+        send(network, client, message);
     }
+
+    send_flush(network, client);
 }
 
 func find_player(client game_client ref, entity_id game_entity_id) (player game_player ref, index u32)
@@ -707,13 +711,14 @@ func find_network_entity(game game_state ref, network_id game_entity_network_id)
     return entity_id;
 }
 
-// if send fails, try reconnect next tick
-func send(network platform_network ref, client game_client ref, message network_message_union) (ok b8)
+func send(network platform_network ref, client game_client ref, message network_message_union)
 {
     assert(client.state is_not client_state.disconnected);
-    var ok = send(network, message, client.socket ref, client.server_address);
-    if not ok
-        client.state = client_state.connecting;
+    send(network, client.socket, client.server_address, client.send_buffer ref, message);
+}
 
-    return ok;
+func send_flush(network platform_network ref, client game_client ref)
+{
+    assert(client.state is_not client_state.disconnected);
+    send_flush(network, client.socket, client.server_address, client.send_buffer ref);
 }

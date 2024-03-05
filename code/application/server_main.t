@@ -119,6 +119,14 @@ while platform_handle_messages(platform ref)
 
 shutdown(server, network);
 
+{
+    var buffer = test_network_send_buffer;
+    loop var i; 256
+    {
+        print("byte: %, count: %\n", i, buffer.repeat_count_by_byte[i]);
+    }
+}
+
 // end of main
 
 func shutdown(server game_server ref, network platform_network ref)
@@ -130,7 +138,8 @@ func shutdown(server game_server ref, network platform_network ref)
         var message network_message_union;
         message.tag = network_message_tag.login_reject;
         message.login_reject.reason = network_message_reject_reason.server_disconnect;
-        send(network, message, server.socket ref, client.address);
+        send(network, server, client, message);
+        send_flush(network, server, client);
     }
 
     platform_network_shutdown(network);

@@ -236,34 +236,114 @@ type network_message_union union
     capture_the_flag_player_team network_message_capture_the_flag_player_team;
 };
 
-func send(network platform_network ref, message network_message_union, send_socket platform_network_socket ref, address = {} platform_network_address) (ok b8)
-{
-    var data = value_to_u8_array(message);
-    var ok = platform_network_send(network, send_socket deref, address, data, platform_network_timeout_milliseconds_zero);
-    network_assert(ok);
-    // platform_network_unbind(network, send_socket);
+var global test_network_send_buffer network_send_buffer;
+var global test_compress_zero_buffer compress_zero_buffer;
 
-    return ok;
-}
-
-func receive(network platform_network ref, receive_socket platform_network_socket) (do_continue b8, has_message b8, message network_message_union, address platform_network_address)
+func receive(network platform_network ref, receive_socket platform_network_socket, buffer u8[]) (do_continue b8, has_message b8, address platform_network_address, iterator u8[])
 {
-    var message network_message_union;
-    var buffer = value_to_u8_array(message);
     var buffer_used_byte_count usize;
+
+    // COMPILER BUG: deref fixed size array and auto cast to dynamic size array
+    // casting u8[512] ref to u8[] or rather accesing .base does not use '->'
     var result = platform_network_receive(network, receive_socket, buffer, buffer_used_byte_count ref, platform_network_timeout_milliseconds_zero);
     network_assert(result.ok);
 
     if not buffer_used_byte_count
-        return result.has_data, false, {} network_message_union, {} platform_network_address;
+        return result.has_data, false, {} platform_network_address, {} u8[];
 
-    if buffer_used_byte_count is_not type_byte_count(network_message_union)
-        return result.has_data, false, {} network_message_union, {} platform_network_address;
+    var iterator = { buffer_used_byte_count, buffer.base } u8[];
+    return result.has_data, true, result.address, iterator;
+}
+
+func next_message(message network_message_union ref, iterator u8[] ref) (ok b8)
+{
+    if not iterator.count
+        return false;
+
+    var decompress_result = decompress_repeat(value_to_u8_array(message deref), iterator);
+    if not decompress_result.ok
+        return false;
+
+    if decompress_result.byte_count is_not type_byte_count(network_message_union)
+        return false;
 
     if message.tag >= network_message_tag.count
-        return result.has_data, false, {} network_message_union, {} platform_network_address;
+        return false;
 
-    return result.has_data, true, message, result.address;
+    return true;
+}
+
+def network_max_packet_size = 512 cast(u32);
+
+struct network_send_buffer
+{
+    expand base       u8[network_max_packet_size];
+
+    compress_state compress_repeat_state;
+
+    packet_count            u32;
+    byte_count              u32;
+    compressed_packet_count u32;
+    compressed_byte_count   u32;
+
+    repeat_count_by_byte u8[256];
+}
+
+func send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref, data u8[])
+{
+    network_assert(data.count);
+
+    {
+        var state compress_repeat_state;
+        var buffer u8[network_max_packet_size];
+        compress_next(state ref, buffer, data);
+        var byte_count = compress_end(state ref, buffer);
+
+        var iterator = { byte_count, buffer.base } u8[];
+        var debuffer u8[network_max_packet_size];
+        var result = decompress_repeat(debuffer, iterator ref);
+        assert(result.ok);
+        var dedata = { result.byte_count, debuffer.base } u8[];
+        assert(data is dedata);
+
+        dedata = {} u8[];
+    }
+
+    if not compress_next(buffer.compress_state ref, buffer.base, data)
+    {
+        var byte_count = compress_end(buffer.compress_state ref, buffer.base);
+        network_assert(byte_count);
+        var ok = platform_network_send(network, send_socket, address, { byte_count, buffer.base.base } u8[], platform_network_timeout_milliseconds_zero);
+        network_assert(ok);
+
+        buffer.compressed_packet_count += 1;
+        buffer.compressed_byte_count   += byte_count;
+
+        ok = compress_next(buffer.compress_state ref, buffer.base, data);
+        network_assert(ok);
+    }
+
+    buffer.packet_count += 1;
+    buffer.byte_count   += data.count cast(u32);
+}
+
+func send_flush(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref)
+{
+    if buffer.compress_state.used_byte_count or buffer.compress_state.repeat_count
+    {
+        var byte_count = compress_end(buffer.compress_state ref, buffer.base);
+        network_assert(byte_count);
+        var ok = platform_network_send(network, send_socket, address, { byte_count, buffer.base.base } u8[], platform_network_timeout_milliseconds_zero);
+        network_assert(ok);
+
+        buffer.compressed_packet_count += 1;
+        buffer.compressed_byte_count   += byte_count;
+    }
+}
+
+func send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref, message network_message_union)
+{
+    send(network, send_socket, address, buffer, value_to_u8_array(message));
 }
 
 type game_user_sprite rgba8[256 * 128];
