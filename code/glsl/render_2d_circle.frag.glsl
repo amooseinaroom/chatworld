@@ -6,9 +6,11 @@ in fragment_type
     vec4  color;    
     vec2  position;
     vec2  center;
-    float radius;    
+    vec2  viewport_position;
+    vec2  viewport_center;
+    float radius;
+    float viewport_radius;    
 } fragment;
-
 out vec4 out_color;
 
 void main()
@@ -21,8 +23,9 @@ void main()
     float distance = fragment.radius - length(fragment.position - fragment.center);
 
     if (distance < 0)
-        discard;
-
-    float alpha = min(distance, 0.1) / 0.1;
+        discard;    
+    
+    float viewport_distance = fragment.viewport_radius - length(fragment.viewport_position - fragment.viewport_center);
+    float alpha = min(viewport_distance, 1);
     out_color = vec4(fragment.color.rgb, fragment.color.a * alpha); //  vec4(1, 0, 0, 1);
 }

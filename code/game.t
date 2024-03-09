@@ -5,6 +5,8 @@ def player_movement_speed_dragging = 3.0;
 
 struct game_state
 {
+    tile_map game_world_tile_map;
+
     camera_position vec2;
     camera_zoom     f32;
 
@@ -64,7 +66,8 @@ func is_not(left game_entity_id, right game_entity_id) (ok b8)
 // COMPILER BUG: somehow sets the type to u8
 def max_entity_count = (1 bit_shift_left 14) cast(u32);
 
-def game_world_size = [ 256, 256 ] vec2;
+def game_world_width = 256 cast(s32);
+def game_world_size  = [ game_world_width, game_world_width ] vec2;
 
 type game_entity_id union
 {
@@ -206,6 +209,17 @@ func init(game game_state ref, random random_pcg)
 
     loop var i u32; game.freelist.count
         game.freelist[i] = i;
+
+    loop var y s32; game_world_width
+    {
+        loop var x s32; game_world_width
+        {
+            if (x + y) bit_and 1
+                game.tile_map[y][x] = game_world_tile.ground;
+            else
+                game.tile_map[y][x] = game_world_tile.gras;
+        }
+    }
 
     game.random = random;
 }
@@ -979,6 +993,75 @@ func direction_from_angle(angle f32) (direction vec2)
 {
     var direction = [ cos(angle), -sin(angle) ] vec2;
     return direction;
+}
+
+enum game_world_tile u8
+{    
+    none;
+    ground;
+    gras;
+    water;
+}
+
+struct game_world_tile_map
+{
+    expand tiles game_world_tile[game_world_width][game_world_width];
+}
+
+func get_tile(tile_map game_world_tile_map ref, x s32, y s32) (tile game_world_tile)
+{
+    if (x < 0) or (x >= game_world_width) or (y < 0) or (y >= game_world_width)
+        return game_world_tile.none;
+    else
+        return tile_map[y][x];
+}
+
+struct game_tile_to_sprite
+{
+    mask      game_tile_mask;
+    sprite_id asset_sprite_id;
+}
+
+type game_tile_mask union
+{
+    expand base game_world_tile[9];
+
+    u64_values u64[2];
+};
+
+func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite_id)
+{
+    if (x < 0) or (x >= game_world_width) or (y < 0) or (y >= game_world_width)
+        return asset_sprite_id.none;
+    
+    var mask game_tile_mask;
+    loop var i; 9
+    {
+        var dx = x + (i mod 3) - 1;
+        var dy = y + (i / 3) - 1;
+        mask[i] = get_tile(tile_map, dx, dy);
+    }    
+
+    var tile_to_sprite_map  =
+    [
+        {} game_tile_to_sprite,
+    ] game_tile_to_sprite[];
+
+    loop var i; tile_to_sprite_map.count
+    {
+        if (tile_to_sprite_map[i].mask.u64_values[0] is mask.u64_values[0]) and (tile_to_sprite_map[i].mask.u64_values[1] is mask.u64_values[1])
+            return tile_to_sprite_map[i].sprite_id;        
+    }
+
+    var simple_tile_to_sprite_map =
+    [
+        asset_sprite_id.none,
+        asset_sprite_id.kenny_rpg_tile_rpgtile024,
+        asset_sprite_id.kenny_rpg_tile_rpgtile019,
+        asset_sprite_id.kenny_rpg_tile_rpgtile029,
+    ] asset_sprite_id[];
+    
+    return simple_tile_to_sprite_map[mask[4]];
 }
 
 func update_game_version(platform platform_api ref, tmemory memory_arena ref)

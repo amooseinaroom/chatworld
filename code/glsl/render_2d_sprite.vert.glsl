@@ -2,9 +2,10 @@
 
 layout (std140, column_major) uniform context_buffer
 {
-    vec2 viewport_size;
-    vec2 draw_offset;
-    vec2 draw_scale;
+    vec2  viewport_size;
+    vec2  draw_offset;
+    float draw_scale;
+    float _unused0;
 };
 
 struct render_2d_gl_sprite
@@ -28,9 +29,8 @@ layout (std140, column_major) uniform sprite_buffer
 
 out fragment_type
 {
-    vec2  uv;
     vec4  color;
-    float saturation;
+    vec2  uv;    
 } fragment;
 
 void main()
@@ -46,11 +46,12 @@ void main()
     );
 
     render_2d_gl_sprite sprite = sprites[gl_InstanceID];
-    
-    vec2 box_min = sprite.pivot - sprite.size * sprite.alignment;
-    vec2 box_max = box_min + sprite.size;
 
     vec2 blend = vertices[gl_VertexID];
+    
+    vec2 box_min = sprite.pivot - sprite.size * sprite.alignment;
+    vec2 box_max = box_min + sprite.size;    
+
     vec2 position = mix(box_min, box_max, blend);
 
     // to viewport position
@@ -62,6 +63,7 @@ void main()
     vec2 clip_position = (position / viewport_size) * 2 - 1;
 
     fragment.color = sprite.color;
+    fragment.uv = mix(sprite.texture_box_min, sprite.texture_box_max, blend);
 
     gl_Position = vec4(clip_position, sprite.depth, 1);
 }

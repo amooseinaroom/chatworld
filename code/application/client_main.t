@@ -372,8 +372,18 @@ func game_update program_update_type
     var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
 
     {
-        var context = { ui.viewport_size, tile_offset, v2(tile_size) } render_2d_context;
-        frame(render, context, tmemory);
+        var global is_init = false;
+
+        if not is_init
+        {
+            do_something(platform, "assets/tiles/RPG Tiles Vector/PNG/", "kenny_rpg_tile", tmemory);
+            is_init = true;
+        }        
+    }
+
+    {
+        var context = { ui.viewport_size, tile_offset, tile_size, 0 } render_2d_context;
+        frame(platform, render, context, asset_sprite_paths, tmemory);
     }
 
     // try reloading key_bindings
@@ -655,13 +665,16 @@ func game_update program_update_type
         {            
             tick(platform, state.server ref, state.network ref, platform.delta_seconds);
 
-            var client game_client_connection ref;
-            while next_client(state.server ref, client ref)
+            if false
             {
-                var buffer = client.send_buffer;
-                var client_index = (client - state.server.clients.base) cast(u32);
+                var client game_client_connection ref;
+                while next_client(state.server ref, client ref)
+                {
+                    var buffer = client.send_buffer;
+                    var client_index = (client - state.server.clients.base) cast(u32);
 
-                print(ui, 10, name_color, font, cursor ref, "client %, compress zero: packet_count: % [% bytes], compressed_packet_count: % [% bytes], compress packet rate: % [% bytes]\n", client_index, buffer.packet_count, buffer.byte_count, buffer.compressed_packet_count, buffer.compressed_byte_count,test_compress_zero_buffer.compressed_packet_count * 100.0 / buffer.packet_count, buffer.compressed_byte_count * 100.0 / buffer.byte_count);
+                    print(ui, 10, name_color, font, cursor ref, "client %, compress zero: packet_count: % [% bytes], compressed_packet_count: % [% bytes], compress packet rate: % [% bytes]\n", client_index, buffer.packet_count, buffer.byte_count, buffer.compressed_packet_count, buffer.compressed_byte_count,test_compress_zero_buffer.compressed_packet_count * 100.0 / buffer.packet_count, buffer.compressed_byte_count * 100.0 / buffer.byte_count);
+                }
             }
         }    
 
@@ -799,7 +812,7 @@ func game_update program_update_type
             // update(game, platform.delta_seconds);
 
             // TEST render_2d
-            if false
+            if true
             {
                 var texture_box box2;
                 texture_box.max = [ 128, 128 ] vec2;
@@ -814,6 +827,8 @@ func game_update program_update_type
 
                 position = get_y_sorted_position(render, client.local_player_position - [ 0, 0.01 ] vec2);
                 draw_circle(render, position.pivot + [ 0, 1 ] vec2, 0.5, position.depth, [ 1, 1, 0, 0.5 ] vec4);
+
+                var tile_map = game.tile_map ref;
 
                 loop var y; game_world_size.y
                 {
@@ -830,7 +845,18 @@ func game_update program_update_type
                         var color = colors[(x + y) bit_and 1];
 
                         var position = { [ x, y ] vec2, {} vec2, 0.99 } render_2d_position;
-                        draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
+                        // draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
+
+                        var sprite_id = get_sprite(tile_map, x, y);                        
+                        draw_sprite(render, sprite_id, position);
+
+                        if false
+                        {
+                        if (x + y) bit_and 1
+                            draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile019, position);
+                        else
+                            draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile024, position);
+                        }
                     }
                 }
 
