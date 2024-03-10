@@ -312,8 +312,9 @@ func game_init program_init_type
 
     var client = state.client ref;
     client.server_address.port = default_server_port;
-    client.server_address.ip[0] = 127;
-    client.server_address.ip[3] = 1;
+    client.server_address.tag = platform_network_address_tag.ip_v4;
+    client.server_address.ip_v4[0] = 127;
+    client.server_address.ip_v4[3] = 1;
 
     update_game_version(platform, tmemory);
 
@@ -378,7 +379,7 @@ func game_update program_update_type
         {
             do_something(platform, "assets/tiles/RPG Tiles Vector/PNG/", "kenny_rpg_tile", tmemory);
             is_init = true;
-        }        
+        }
     }
 
     {
@@ -525,7 +526,7 @@ func game_update program_update_type
 
         if menu_button(menu, location_id(0), font, cursor ref, "Host")
         {
-            init(state.server ref, platform, state.network ref, client.server_address.port, tmemory);
+            init(state.server ref, platform, state.network ref, client.server_address.tag, client.server_address.port, tmemory);
             init(client, state.network ref, client.server_address);
             state.is_host = true;
         }
@@ -662,7 +663,7 @@ func game_update program_update_type
     else
     {
         if state.is_host
-        {            
+        {
             tick(platform, state.server ref, state.network ref, platform.delta_seconds);
 
             if false
@@ -676,7 +677,7 @@ func game_update program_update_type
                     print(ui, 10, name_color, font, cursor ref, "client %, compress zero: packet_count: % [% bytes], compressed_packet_count: % [% bytes], compress packet rate: % [% bytes]\n", client_index, buffer.packet_count, buffer.byte_count, buffer.compressed_packet_count, buffer.compressed_byte_count,test_compress_zero_buffer.compressed_packet_count * 100.0 / buffer.packet_count, buffer.compressed_byte_count * 100.0 / buffer.byte_count);
                 }
             }
-        }    
+        }
 
         tick(client, state.network ref, platform.delta_seconds);
 
@@ -685,7 +686,9 @@ func game_update program_update_type
             var global animation_time f32;
             animation_time = fmod(animation_time + platform.delta_seconds, 1.0);
             var text_color = [ 255, 255, 255, (sin(animation_time * 2 * pi32) * 0.5 + 0.5 * 255) cast(u8) ] rgba8;
-            print(ui, 10, text_color, font, cursor ref, "Connecting to Server %.%.%.%:%", client.server_address.ip[0], client.server_address.ip[1], client.server_address.ip[2], client.server_address.ip[3], client.server_address.port);
+
+            if (client.server_address.tag is platform_network_address_tag.ip_v4)
+                print(ui, 10, text_color, font, cursor ref, "Connecting to Server %.%.%.%:%", client.server_address.ip_v4[0], client.server_address.ip_v4[1], client.server_address.ip_v4[2], client.server_address.ip_v4[3], client.server_address.port);
         }
 
         if (client.state is client_state.online)
@@ -847,7 +850,7 @@ func game_update program_update_type
                         var position = { [ x, y ] vec2, {} vec2, 0.99 } render_2d_position;
                         // draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
 
-                        var sprite_id = get_sprite(tile_map, x, y);                        
+                        var sprite_id = get_sprite(tile_map, x, y);
                         draw_sprite(render, sprite_id, position);
 
                         if false

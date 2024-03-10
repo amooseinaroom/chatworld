@@ -138,7 +138,7 @@ func next_client(server game_server ref, client_iterator game_client_connection 
         client += 1;
     }
 
-    while (client is_not end) and not client.address.ip.u32_value
+    while (client is_not end) and (client.address.tag is platform_network_address_tag.invalid)
         client += 1;
 
     client_iterator deref = client;
@@ -178,7 +178,7 @@ func queue(server game_server ref, message network_message_union, specific_clien
     if specific_client_index is_not u32_invalid_index
     {
         assert(specific_client_index < server.clients.count);
-        assert(server.clients[specific_client_index].address.ip.u32_value);
+        assert(server.clients[specific_client_index].address.tag is_not platform_network_address_tag.invalid);
 
         var slot = specific_client_index / 64;
         var bit  = specific_client_index mod 64;
@@ -188,7 +188,7 @@ func queue(server game_server ref, message network_message_union, specific_clien
     {
         loop var client_index u32; server.clients.count
         {
-            if not server.clients[client_index].address.ip.u32_value
+            if not server.clients[client_index].address.tag is_not platform_network_address_tag.invalid
                 continue;
 
             var slot = client_index / 64;
@@ -233,10 +233,10 @@ def capture_the_flag_team_colors =
     [   0, 0, 255, 255 ] rgba8
 ] rgba8[];
 
-func init(server game_server ref, platform platform_api ref, network platform_network ref, server_port u16, tmemory memory_arena ref)
+func init(server game_server ref, platform platform_api ref, network platform_network ref, address_tag platform_network_address_tag, server_port u16, tmemory memory_arena ref)
 {
     server.port = server_port;
-    server.socket = platform_network_bind(network, server.port);
+    server.socket = platform_network_peer_open(network, address_tag, server.port);
     network_assert(platform_network_is_valid(server.socket));
     network_print("Server: started. version: %, port: %, print level: %, debug: %\n", game_version, server_port, network_print_max_level, lang_debug);
 
@@ -288,7 +288,7 @@ func new_network_id(server game_server ref) (id game_entity_network_id)
 }
 
 func tick(platform platform_api ref, server game_server ref, network platform_network ref, delta_seconds f32)
-{    
+{
     var game = server.game ref;
 
     network_assert(platform_network_is_valid(server.socket));

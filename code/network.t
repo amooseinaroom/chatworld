@@ -355,8 +355,8 @@ func load_server_address(platform platform_api ref, network platform_network ref
     var source = platform_read_entire_file(platform, tmemory, "server.txt");
 
     var dns string;
-    var server_ip = address.ip;
-    var port      = address.port;
+    var parsed_address platform_network_address;
+    var parsed_address_ok = false;
 
     var it = source;
     skip_space(it ref);
@@ -371,17 +371,69 @@ func load_server_address(platform platform_api ref, network platform_network ref
         {
             skip_space(it ref);
 
-            loop var i u32; 4
+            var ip_text = try_skip_until_set(it ref, " \t\n\r");
+
+            var ok = true;
+
             {
-                var value u32;
-                if not try_parse_u32(value ref, it ref) or (value > 255)
-                    network_assert(false);
+                var ip_it = ip_text;
+                // try ip v4 first
+                loop var i u32; 4
+                {
+                    var value u32;
+                    if not try_parse_u32(value ref, ip_it ref) or (value > 255)
+                    {
+                        ok = false;
+                        break;
+                    }
 
-                server_ip[i] = value cast(u8);
+                    parsed_address.ip_v4[i] = value cast(u8);
 
-                if (i < 3) and not try_skip(it ref, ".")
-                    network_assert(false);
+                    if (i < 3) and not try_skip(ip_it ref, ".")
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+
+                if ok
+                    parsed_address.tag = platform_network_address_tag.ip_v4;
             }
+
+            // try ip v6
+            // we do not except shortened names
+            if not ok
+            {
+                var ip_it = ip_text;
+
+                ok = true;
+                var pairs u16[8];
+                loop var pair; 8
+                {
+                    var value u32;
+                    if not try_parse_u32(value ref, ip_it ref, 16) or (value > 0xffff)
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    if (pair < 7) and not try_skip(ip_it ref, ":")
+                    {
+                        ok = false;
+                        break;
+                    }
+
+                    pairs[pair] = value cast(u16);
+                }
+
+                if ok
+                {
+                    parsed_address.tag = platform_network_address_tag.ip_v6;
+                    parsed_address.ip_v6 = pairs ref cast(platform_network_ip_v6 ref) deref;
+                }
+            }
+
+            parsed_address_ok = ok;
 
             skip_space(it ref);
         }
@@ -394,25 +446,28 @@ func load_server_address(platform platform_api ref, network platform_network ref
         else
             network_assert(false);
 
+        var port u32;
         if not try_parse_u32(port ref, it ref) or (port > 65535)
             network_assert(false);
+
+        parsed_address.port = port cast(u16);
 
         skip_space(it ref);
         break;
     }
 
-    address.port = port cast(u16);
-
     if dns.count
     {
-        var result = platform_network_query_dns_ip(network, dns);
+        var result = platform_network_query_dns(network, dns);
         if result.ok
-            address.ip = result.ip;
+            address = result.address;
     }
-    else
+    else if parsed_address_ok
     {
-        address.ip = server_ip;
+        address = parsed_address;
     }
+
+    address.port = parsed_address.port;
 
     return address;
 }

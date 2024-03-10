@@ -293,13 +293,13 @@ func init(client game_client ref, network platform_network ref, server_address p
 
     if not platform_network_is_valid(client.socket)
     {
-        client.socket = platform_network_bind(network);
+        client.socket = platform_network_peer_open(network, server_address.tag);
         require(platform_network_is_valid(client.socket));
     }
 
     init(client.game.base ref, {} random_pcg);
 
-    network_print("Client: started. version: %, port: %\n, print level: %, debug: %, enable_hot_reloading: %", game_version, client.socket.address.port, network_print_max_level, lang_debug, enable_hot_reloading);
+    network_print("Client: started. version: %, port: %\n, print level: %, debug: %, enable_hot_reloading: %", game_version, client.socket.port, network_print_max_level, lang_debug, enable_hot_reloading);
     client.state = client_state.connecting;
     client.server_address = server_address;
 

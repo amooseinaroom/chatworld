@@ -51,12 +51,13 @@ var game = server.game ref;
 update_game_version(platform ref, memory ref);
 
 var server_address platform_network_address;
+server_address.tag = platform_network_address_tag.ip_v4;
 server_address.port = default_server_port;
-server_address.ip[0] = 127;
-server_address.ip[3] = 1;
+server_address.ip_v4[0] = 127;
+server_address.ip_v4[3] = 1;
 server_address = load_server_address(platform ref, network, memory ref, server_address);
 
-init(server, platform ref, network, server_address.port, memory ref);
+init(server, platform ref, network, server_address.tag, server_address.port, memory ref);
 
 {
     var it = try_platform_read_entire_file(platform ref, memory ref, "server_new_admins.txt").data;
