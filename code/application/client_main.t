@@ -8,7 +8,7 @@ def debug_player_server_position = false;
 def game_title = "chatworld client";
 
 // override def network_print_max_level = network_print_level.count;
-override def network_print_max_level = network_print_level.info;
+// override def network_print_max_level = network_print_level.info;
 
 struct program_state
 {
@@ -334,6 +334,26 @@ func game_init program_init_type
     evaluate(client.name_color ref);
 
     client.server_address = load_server_address(platform, state.network ref, tmemory, client.server_address);
+
+    if client.server_address.tag is platform_network_address_tag.ip_v4
+        network_print("Client: loaded server ipv4: %.%.%.%, port: %\n",
+            client.server_address.ip_v4[0],
+            client.server_address.ip_v4[1],
+            client.server_address.ip_v4[2],
+            client.server_address.ip_v4[3],
+            client.server_address.port);
+
+    else
+        network_print("Client: loaded server ipv6: %:%:%:%:%:%:%:%, port: %\n",
+            format_hex(client.server_address.ip_v6.u16_values[0], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[1], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[2], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[3], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[4], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[5], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[6], "a"[0], 4),
+            format_hex(client.server_address.ip_v6.u16_values[7], "a"[0], 4),
+            client.server_address.port);
 
     {
         var result = try_platform_read_entire_file(platform, tmemory, client_save_state_path);
@@ -815,7 +835,7 @@ func game_update program_update_type
             // update(game, platform.delta_seconds);
 
             // TEST render_2d
-            if true
+            if false
             {
                 var texture_box box2;
                 texture_box.max = [ 128, 128 ] vec2;

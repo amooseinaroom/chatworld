@@ -1,13 +1,2 @@
 server dns amooseinaroom.org 50881
-server ip  2a02:2454:9594:2f00:ec02:f15d:96b3:a6fd 50881
-
-# not working
-server ip  2a02:2454:9594:2f00:0ffb:cca6:6852:a920 50881
-server ip 77.64.253.30 50881
-
-server ip  2a02:2454:8000:003b:9884:9d8c:2ccb
-server ip  127.0.0.1 50889
-server ip  192.168.178.29 50889
-
-server dns ec2-18-153-11-101.eu-central-1.compute.amazonaws.com 50881
-server dns moosechatworld.ddns.net 50881
+server ip  127.0.0.1 50881
