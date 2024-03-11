@@ -161,6 +161,12 @@ struct server_pending_network_message_buffer
 
 func queue(server game_server ref, message network_message_union, specific_client_index = u32_invalid_index)
 {
+    if not server.client_count
+    {
+        assert(specific_client_index is u32_invalid_index);
+        return;
+    }
+
     var buffer = server.pending_messages ref;
     network_assert(buffer.used_count < buffer.count);
 
@@ -434,7 +440,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     message.tag = network_message_tag.login_reject;
                     message.acknowledge_message_id = received_message.acknowledge_message_id; // counts as acknowledge for loging message
                     message.login_reject.reason = reject_reason;
-                    send(network, server, client, message);
+                    send_unqueued(network, server, result.address, message);
                 }
                 else
                 {
@@ -686,9 +692,6 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         message.tag = network_message_tag.login_reject;
                         message.login_reject.reason = network_message_reject_reason.server_kick;
                         client.do_remove = true;
-
-                        var client_index = (client - server.clients.base) cast(u32);
-                        queue(server, message, client_index);
                     }
                 }
             }
@@ -764,33 +767,32 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 server.users.extended_users[client.user_index].tent_id = tent_id;
             }
 
-            // updated client masks in pending_messages
-            // TODO: test this
-            multiline_comment
+            // update pending messages
             {
                 var buffer = server.pending_messages ref;
 
-                var remove_slot     = a / 64;
-                var remove_bit_mask = bit64(a  mod 64);
+                var client_index = (client - server.clients.base) cast(u32);
 
-                var swapped_slot     = (server.client_count - 1) / 64;
-                var swapped_bit_mask = bit64((server.client_count - 1) mod 64);
+                var remove_slot     = client_index / 64;
+                var remove_bit_mask = bit_not bit64(client_index mod 64);
 
                 loop var message_index u32; buffer.used_count
                 {
                     var message = buffer[message_index] ref;
 
-                    message.client_mask[remove_slot] bit_and= bit_not remove_bit_mask;
-
-                    var swapped_is_set = (message.client_mask[swapped_slot] bit_and swapped_bit_mask);
-                    message.client_mask[swapped_slot] bit_and= bit_not swapped_bit_mask;
-
-                    if swapped_is_set
-                        message.client_mask[remove_slot] bit_or= remove_bit_mask;
+                    message.client_mask[remove_slot] bit_and= remove_bit_mask;
 
                     if try_remove_acknowledged_message(server, message_index)
-                        message_index -= 1; // repeat index
+                        message_index -= 1;
                 }
+            }
+
+            // try kick client
+            {
+                var message network_message_union;
+                message.tag = network_message_tag.login_reject;
+                message.login_reject.reason = network_message_reject_reason.server_kick;
+                send_unqueued(network, server, client.address, message);
             }
 
             var client_entity_network_id = client.entity_network_id;
@@ -799,16 +801,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
             remove(game, client.entity_id);
             server.client_count -= 1;
 
-            if false
-            {
-                client deref = server.clients[server.client_count];
-                client -= 1; // repeat index
-            }
-            else
-            {
-                client.address = {} platform_network_address;
-                server.client_freelist[server.client_count] = (client - server.clients.base) cast(u32);
-            }
+            client.address = {} platform_network_address;
+            server.client_freelist[server.client_count] = (client - server.clients.base) cast(u32);
 
             // send message after client is removed
             var message network_message_union;
@@ -1311,4 +1305,11 @@ func send(network platform_network ref, server game_server ref, client game_clie
 func send_flush(network platform_network ref, server game_server ref, client game_client_connection ref)
 {
     send_flush(network, server.socket, client.address, client.send_buffer ref);
+}
+
+func send_unqueued(network platform_network ref, server game_server ref, address platform_network_address, message network_message_union)
+{
+    var send_buffer network_send_buffer;
+    send(network, server.socket, address, send_buffer ref, message);
+    send_flush(network, server.socket, address, send_buffer ref);
 }
