@@ -295,6 +295,26 @@ func init(client game_client ref, network platform_network ref, server_address p
     {
         client.socket = platform_network_peer_open(network, server_address.tag);
         require(platform_network_is_valid(client.socket));
+
+        if server_address.tag is platform_network_address_tag.ip_v4
+            network_print("Client: connecting to ipv4: %.%.%.%, port: %\n",
+                server_address.ip_v4[0],
+                server_address.ip_v4[1],
+                server_address.ip_v4[2],
+                server_address.ip_v4[3],
+                server_address.port);
+
+        else
+            network_print("Client: connecting to ipv6: %:%:%:%:%:%:%:%, port: %\n",
+                format_hex(server_address.ip_v6.u16_values[0], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[1], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[2], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[3], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[4], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[5], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[6], "a"[0], 4),
+                format_hex(server_address.ip_v6.u16_values[7], "a"[0], 4),
+                server_address.port);
     }
 
     init(client.game.base ref, {} random_pcg);
@@ -406,6 +426,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
                 client.state = client_state.disconnected;
                 client.reject_reason = received_message.login_reject.reason;
+                return;
             }
             case network_message_tag.add_player
             {
@@ -558,7 +579,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
         if client.pending_messages.resend_count_without_replies > 10
         {
             client.state = client_state.disconnected;
-            break;
+            return;
         }
     }
     case client_state.online
