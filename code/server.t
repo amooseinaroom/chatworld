@@ -512,14 +512,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 var player = entity.player ref;
                 player.input_movement += received_message.user_input.movement;
 
-                if squared_length(player.input_movement) > 0
-                {
-                    var direction = normalize(player.input_movement);
-                    entity.view_direction = acos(dot([ 1, 0 ] vec2, direction));
-
-                    if dot([ 0, 1 ] vec2, direction) > 0
-                        entity.view_direction = 2 * pi32 - entity.view_direction;
-                }
+                var result = angle_from_direction(player.input_movement);
+                if result.ok
+                    entity.view_direction = result.angle;
 
                 if received_message.user_input.do_attack
                 label check_attack
@@ -597,7 +592,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                                 {
                                     var other_position = other.position + other.collider.center;
                                     var max_grab_distance = radius + other.collider.radius;
-                                    var distance_squared = squared_length(other.position - entity.position);
+                                    var distance_squared = squared_length(other_position - position);
                                     if (distance_squared < (max_grab_distance * max_grab_distance)) and ( distance_squared < closest_player_distance_squared)
                                     {
                                         closest_player_distance_squared = distance_squared;

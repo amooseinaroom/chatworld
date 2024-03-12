@@ -18,6 +18,8 @@ struct program_state
 
     network platform_network;
 
+    custom_sprite_paths string[];
+
     error_message_buffer u8[4096];
     error_messages string_builder;
 
@@ -308,6 +310,40 @@ func game_init program_init_type
 
     platform_network_init(state.network ref);
 
+    {
+        var iterator = platform_file_search_init(platform, "customization/");
+
+        var sprite_relative_paths asset_path[];
+
+        while platform_file_search_next(platform, iterator ref)
+        {
+            if iterator.found_file.is_directory
+                continue;
+
+            var split = split_path(iterator.found_file.relative_path);
+
+            if split.extension is_not "png"
+                continue;
+
+            if not try_skip(split.name ref, "character_front_")
+                continue;
+
+            reallocate_array(tmemory, sprite_relative_paths ref, sprite_relative_paths.count + 1);
+            sprite_relative_paths[sprite_relative_paths.count - 1].count = split.name.count cast(u32);
+             iterator.found_file.relative_path.count cast(u32);
+            copy_bytes(sprite_relative_paths[sprite_relative_paths.count - 1].base.base, split.name.base, split.name.count);
+        }
+
+        reallocate_array(state.memory ref, state.custom_sprite_paths ref, sprite_relative_paths.count * 2);
+        var all_paths_text string;
+        loop var i; sprite_relative_paths.count
+        {
+            var path = { sprite_relative_paths[i].count, sprite_relative_paths[i].base.base } string;
+            state.custom_sprite_paths[i * 2   ] = write(state.memory ref, all_paths_text ref, "customization/character_front_%.png", path);
+            state.custom_sprite_paths[i * 2 + 1] = write(state.memory ref, all_paths_text ref, "customization/character_back_%.png", path);
+        }
+    }
+
     state.error_messages = string_builder_from_buffer(state.error_message_buffer);
 
     var client = state.client ref;
@@ -390,21 +426,17 @@ func game_update program_update_type
     var tiles_per_height = tiles_per_width / state.letterbox_width_over_heigth;
     var tile_size = ui.viewport_size.width / tiles_per_width;
 
-    var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
-
     {
         var global is_init = false;
 
         if not is_init
         {
-            do_something(platform, "assets/tiles/RPG Tiles Vector/PNG/", "kenny_rpg_tile", tmemory);
+            var sprite_paths asset_path[];
+            asset_paths_append(sprite_paths ref, platform, "assets/tiles/RPG Tiles Vector/PNG/", "kenny_rpg_tile", tmemory);
+            asset_paths_append(sprite_paths ref, platform, "assets/entities/", "entity", tmemory);
+            asset_generate_sprite_ids(sprite_paths, platform, tmemory);
             is_init = true;
         }
-    }
-
-    {
-        var context = { ui.viewport_size, tile_offset, tile_size, 0 } render_2d_context;
-        frame(platform, render, context, asset_sprite_paths, tmemory);
     }
 
     // try reloading key_bindings
@@ -834,35 +866,53 @@ func game_update program_update_type
 
             // update(game, platform.delta_seconds);
 
-            // TEST render_2d
-            if false
+            var tile_offset = floor(ui.viewport_size * 0.5 + (game.camera_position * -tile_size));
+
+            // start render 2d frame after camera positoin update
             {
-                var texture_box box2;
-                texture_box.max = [ 128, 128 ] vec2;
+                var context = { ui.viewport_size, tile_offset, tile_size, 0 } render_2d_context;
 
-                var position = get_y_sorted_position(render, client.local_player_position);
-                // { , v2(0.5) } render_2d_position;
-                draw_texture_box(render, position, v2(1.0), [ 1, 0, 0, 1 ] vec4, {} render_2d_texture, texture_box);
+                var sprite_paths string[];
+                reallocate_array(tmemory, sprite_paths ref, asset_sprite_paths.count + state.custom_sprite_paths.count);
 
-                position = get_y_sorted_position(render, { 4, 4 } vec2);
-                // { , v2(0.5) } render_2d_position;
-                draw_texture_box(render, position, v2(1.0), [ 0, 1, 0, 1 ] vec4, {} render_2d_texture, texture_box);
+                // HACK: copy_array expects both array types to be identical
+                var paths string[] = asset_sprite_paths;
+                copy_array({ asset_sprite_paths.count, sprite_paths.base } string[], paths);
+                copy_array({ state.custom_sprite_paths.count, sprite_paths.base + asset_sprite_paths.count } string[], state.custom_sprite_paths);
 
-                position = get_y_sorted_position(render, client.local_player_position - [ 0, 0.01 ] vec2);
-                draw_circle(render, position.pivot + [ 0, 1 ] vec2, 0.5, position.depth, [ 1, 1, 0, 0.5 ] vec4);
+                frame(platform, render, context, sprite_paths, tmemory);
+            }
 
+            var camera_box box2;
+            var camera_box_size = [ tiles_per_width, tiles_per_height ] vec2;
+            camera_box.min = game.camera_position - (camera_box_size * 0.5);
+            camera_box.max = game.camera_position + camera_box_size;
+
+            // TEST render_2d
+            if true
+            {
                 var tile_map = game.tile_map ref;
 
-                loop var y; game_world_size.y
+                var min_tile_x = floor(camera_box.min.x) cast(s32);
+                var min_tile_y = floor(camera_box.min.y) cast(s32);
+                var max_tile_x = ceil(camera_box.max.x) cast(s32);
+                var max_tile_y = ceil(camera_box.max.y) cast(s32);
+
+                loop var y = min_tile_y; max_tile_y
                 {
-                    loop var x; game_world_size.x
+                    loop var x = min_tile_x; max_tile_x
                     {
                         var box box2;
                         box.min = [ x, y ] vec2;
                         box.max = box.min + 1;
+                        // var colors = [
+                        //     [ 0.5, 0.1, 0.1, 1.0 ] vec4,
+                        //     [ 0.1, 0.1, 0.5, 1.0 ] vec4,
+                        // ] vec4[];
+
                         var colors = [
-                            [ 0.5, 0.1, 0.1, 1.0 ] vec4,
-                            [ 0.1, 0.1, 0.5, 1.0 ] vec4,
+                            [ 0.5, 1.0, 1.0, 1.0 ] vec4,
+                            [ 1.0, 1.0, 0.5, 1.0 ] vec4,
                         ] vec4[];
 
                         var color = colors[(x + y) bit_and 1];
@@ -871,7 +921,7 @@ func game_update program_update_type
                         // draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
 
                         var sprite_id = get_sprite(tile_map, x, y);
-                        draw_sprite(render, sprite_id, position);
+                        draw_sprite(render, sprite_id, position); //, color);
 
                         if false
                         {
@@ -880,6 +930,79 @@ func game_update program_update_type
                         else
                             draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile024, position);
                         }
+                    }
+                }
+
+                 // draw colliders
+                {
+                    var index = next_entity_start;
+                    while next_entity(game.base ref, index ref)
+                    {
+                        var entity = game.entity[index];
+                        var animation = game.animation[index] ref;
+
+                        var direction = direction_from_angle(entity.view_direction);
+                        if direction.x > 0.2
+                            animation.flip_x = true;
+                        else if direction.x < -0.2
+                            animation.flip_x = false;
+
+                        if direction.y > 0.2
+                            animation.show_back = true;
+                        else if direction.y < -0.2
+                            animation.show_back = false;
+
+                        var position = get_y_sorted_position(render, entity.position + entity.collider.center, v2(0.5));
+
+                        var sprite_id = asset_sprite_id.none;
+                        var color = [ 1, 1, 1, 1 ] vec4;
+
+                        var flip_y = false;
+
+                        switch game.tag[index]
+                        case game_entity_tag.chicken
+                        {
+                            if animation.show_back
+                                sprite_id = asset_sprite_id.entity_chicken_back;
+                            else
+                                sprite_id = asset_sprite_id.entity_chicken_front;
+
+                            if entity.health <= 0
+                            {
+                                // color = [ 0.4, 0.4, 0.4, 1.0 ] vec4;
+                                flip_y = true;
+                            }
+                        }
+
+                        if sprite_id is_not asset_sprite_id.none
+                        {
+                            draw_sprite(render, sprite_id, position, color, animation.flip_x, flip_y);
+                        }
+                    }
+                }
+
+                loop var i u32; client.player_count
+                {
+                    var player = client.players[i];
+                    var entity = get(game, player.entity_id);
+                    var animation = game.animation[player.entity_id.index_plus_one - 1];
+
+                    var sprite_id = asset_sprite_id.count + animation.show_back cast(u32);
+
+                    var position = get_y_sorted_position(render, entity.position, v2(0.5, 0));
+                    draw_sprite(render, sprite_id, position, to_vec4(player.body_color), animation.flip_x);
+                }
+
+                // draw colliders
+                if false
+                {
+                    var index = next_entity_start;
+                    while next_entity(game.base ref, index ref)
+                    {
+                        var entity = game.entity[index];
+                        var position = { entity.position + entity.collider.center, v2(0.5), 0.98 } render_2d_position;
+
+                        draw_circle(render, position.pivot, entity.collider.radius, position.depth, [ 0.1, 0.1, 1, 0.25 ] vec4);
                     }
                 }
 

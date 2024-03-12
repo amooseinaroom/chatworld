@@ -7,6 +7,13 @@ shadowmancer, have after images repeat your actions
 
 done on stream:
 
+day 12:
+* more work on 2D renderer
+
+day 11:
+* finished up simple loss-less package compression
+* more work on 2D renderer, loading sprites
+
 day 10:
 * 2D renderer from scratch to replace ui code
 

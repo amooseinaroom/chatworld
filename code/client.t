@@ -77,6 +77,13 @@ struct game_client_state
     expand base game_state;
 
     // add some client only entity data
+    animation game_entity_animation[max_entity_count];
+}
+
+struct game_entity_animation
+{
+    flip_x    b8;
+    show_back b8;
 }
 
 func get(game game_client_state ref, id game_entity_id) (entity game_entity ref)

@@ -214,12 +214,26 @@ func init(game game_state ref, random random_pcg)
     {
         loop var x s32; game_world_width
         {
-            if (x + y) bit_and 1
-                game.tile_map[y][x] = game_world_tile.ground;
-            else
-                game.tile_map[y][x] = game_world_tile.gras;
+            game.tile_map[y][x] = game_world_tile.grass;
+
+            // if (x + y) bit_and 1
+            //     game.tile_map[y][x] = game_world_tile.ground;
+            // else
+            //     game.tile_map[y][x] = game_world_tile.grass;
         }
     }
+
+    //loop var y s32 = 2; game_world_width - 4
+    //    loop var x s32 = 2; game_world_width  - 4
+    //    {
+    //        game.tile_map[y][x] = game_world_tile.grass;
+    //    }
+
+    loop var y s32 = 5; 6
+        loop var x = 5; 6
+        {
+            game.tile_map[y][x] = game_world_tile.ground;
+        }
 
     game.random = random;
 }
@@ -408,6 +422,26 @@ func get(game game_state ref, id game_entity_id) (entity game_entity ref)
     assert(game.tag[index] is_not game_entity_tag.none);
 
     return game.entity[index] ref;
+}
+
+def next_entity_start = u32_invalid_index;
+
+func next_entity(game game_state ref, index_ref u32 ref, tag_mask u64 = bit_not bit64(game_entity_tag.none)) (ok b8)
+{
+    var index = index_ref deref;
+    index += 1;
+    assert(index < game.entity.count);
+
+    while (index < game.entity.count)
+    {
+        if not game.do_delete[index] and (tag_mask bit_and bit64(game.tag[index]))
+            break;
+
+        index += 1;
+    }
+
+    index_ref deref = index;
+    return (index < game.entity.count);
 }
 
 def max_corpse_lifetime = 10.0;
@@ -624,6 +658,10 @@ func update(game game_state ref, delta_seconds f32)
 
                         chicken.toggle_moveing_timeout += random_f32_zero_to_one(game.random ref) * 10 + 0.5;
                         chicken.move_direction = direction;
+
+                        var result = angle_from_direction(direction);
+                        if result.ok
+                            entity.view_direction = result.angle;
                     }
                     else
                     {
@@ -995,11 +1033,27 @@ func direction_from_angle(angle f32) (direction vec2)
     return direction;
 }
 
+func angle_from_direction(direction vec2) (ok b8, angle f32)
+{
+    if squared_length(direction) > 0
+    {
+        direction = normalize(direction);
+        var angle = acos(dot([ 1, 0 ] vec2, direction));
+
+        if dot([ 0, 1 ] vec2, direction) >= 0
+            angle = 2 * pi32 - angle;
+
+        return true, angle;
+    }
+
+    return false, 0;
+}
+
 enum game_world_tile u8
-{    
+{
     none;
     ground;
-    gras;
+    grass;
     water;
 }
 
@@ -1011,15 +1065,16 @@ struct game_world_tile_map
 func get_tile(tile_map game_world_tile_map ref, x s32, y s32) (tile game_world_tile)
 {
     if (x < 0) or (x >= game_world_width) or (y < 0) or (y >= game_world_width)
-        return game_world_tile.none;
+        return game_world_tile.water;
     else
         return tile_map[y][x];
 }
 
 struct game_tile_to_sprite
 {
-    mask      game_tile_mask;
-    sprite_id asset_sprite_id;
+    mask       game_tile_mask;
+    sprite_id  asset_sprite_id;
+    check_mask u16;
 }
 
 type game_tile_mask union
@@ -1031,26 +1086,363 @@ type game_tile_mask union
 
 func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite_id)
 {
-    if (x < 0) or (x >= game_world_width) or (y < 0) or (y >= game_world_width)
-        return asset_sprite_id.none;
-    
+    //if (x < 0) or (x >= game_world_width) or (y < 0) or (y >= game_world_width)
+        //return asset_sprite_id.kenny_rpg_tile_rpgtile029; // water asset_sprite_id.none;
+
     var mask game_tile_mask;
     loop var i; 9
     {
         var dx = x + (i mod 3) - 1;
-        var dy = y + (i / 3) - 1;
+        var dy = y + -(i / 3) + 1;
         mask[i] = get_tile(tile_map, dx, dy);
-    }    
+    }
+
+    def check_mask_all   = -1 cast(u16);
+    def check_mask_cross = (bit32(1) bit_or bit32(3) bit_or bit32(4) bit_or bit32(5) bit_or bit32(7)) cast(u16);
 
     var tile_to_sprite_map  =
     [
-        {} game_tile_to_sprite,
+        // grass surrounded by ground
+        {
+            [
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile000,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile001,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile002,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile018,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile036,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile037,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile038,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile020,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile003,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile004,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile021,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile022,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        // water surrounded by ground
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile010,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile011,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile012,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile028,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile044,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile045,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile046,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile030,
+            check_mask_cross
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile013,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile014,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.water, game_world_tile.water, game_world_tile.grass,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile031,
+            check_mask_all
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+                game_world_tile.water, game_world_tile.water, game_world_tile.water,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile032,
+            check_mask_all
+        } game_tile_to_sprite,
+
     ] game_tile_to_sprite[];
+
+    multiline_comment
+    {
+    var not_used =
+    [
+        // ground surrounded by grass
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile005
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile006
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile007
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile023
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile041
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile042
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+                game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile043
+        } game_tile_to_sprite,
+
+        {
+            [
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+                game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
+            ] game_tile_mask,
+            asset_sprite_id.kenny_rpg_tile_rpgtile025
+        } game_tile_to_sprite,
+    ] game_tile_to_sprite[];
+    }
 
     loop var i; tile_to_sprite_map.count
     {
-        if (tile_to_sprite_map[i].mask.u64_values[0] is mask.u64_values[0]) and (tile_to_sprite_map[i].mask.u64_values[1] is mask.u64_values[1])
-            return tile_to_sprite_map[i].sprite_id;        
+        var tile_to_sprite = tile_to_sprite_map[i];
+
+        var do_match = true;
+        loop var mask_index u32; 9
+        {
+            if (tile_to_sprite.check_mask bit_and bit32(mask_index)) and (tile_to_sprite.mask[mask_index] is_not mask[mask_index])
+            {
+                do_match = false;
+                break;
+            }
+        }
+
+        //if (tile_to_sprite_map[i].mask.u64_values[0] is mask.u64_values[0]) and (tile_to_sprite_map[i].mask.u64_values[1] is mask.u64_values[1])
+
+        if do_match
+            return tile_to_sprite_map[i].sprite_id;
     }
 
     var simple_tile_to_sprite_map =
@@ -1060,7 +1452,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
         asset_sprite_id.kenny_rpg_tile_rpgtile019,
         asset_sprite_id.kenny_rpg_tile_rpgtile029,
     ] asset_sprite_id[];
-    
+
     return simple_tile_to_sprite_map[mask[4]];
 }
 

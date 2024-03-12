@@ -8,7 +8,7 @@ import platform;
 import stb_image;
 
 struct render_2d_api
-{      
+{
     context render_2d_context;
 
     textures render_2d_texture_buffer;
@@ -39,7 +39,7 @@ struct render_2d_sprite_info
 
 struct render_2d_context
 {
-    viewport_size vec2;    
+    viewport_size vec2;
     draw_offset   vec2;
     draw_scale    f32;
     _unused0      f32;
@@ -53,7 +53,7 @@ struct render_2d_texture
 struct render_2d_texture_buffer
 {
     expand base               render_2d_texture[];
-           require_used_count usize;           
+           require_used_count usize;
 }
 
 struct render_2d_position
@@ -72,13 +72,13 @@ struct render_2d_gl_sprite
     depth           f32;
     _unused         f32;
     texture_box_min vec2;
-    texture_box_max vec2;    
+    texture_box_max vec2;
 }
 
 struct render_2d_gl_sprite_buffer
 {
     expand base               render_2d_gl_sprite[];
-           require_used_count usize;           
+           require_used_count usize;
 }
 
 struct render_2d_gl_circle
@@ -92,13 +92,13 @@ struct render_2d_gl_circle
 struct render_2d_gl_circle_buffer
 {
     expand base               render_2d_gl_circle[];
-           require_used_count usize;           
+           require_used_count usize;
 }
 
 enum render_2d_gl_buffer
 {
     context_buffer;
-    sprite_buffer; 
+    sprite_buffer;
     circle_buffer;
 }
 
@@ -110,12 +110,12 @@ struct render_2d_shader_sprite
 {
     handle u32;
 
-    sprite_texture s32;    
+    sprite_texture s32;
 }
 
 struct render_2d_shader_circle
 {
-    handle u32;    
+    handle u32;
 }
 
 def render_2d_gl_shader_sprite_vert = import_text_file("glsl/render_2d_sprite.vert.glsl");
@@ -151,7 +151,7 @@ func frame(platform platform_api ref, render render_2d_api ref, context render_2
         reallocate_array(tmemory, render.circles.base ref, maximum(render.circles.count, render.circles.require_used_count * 2));
         render.circles.require_used_count = 0;
     }
-    
+
     {
         render.textures.base = {} render_2d_texture[];
         var texture_count = maximum(32, render.textures.count);
@@ -163,7 +163,7 @@ func frame(platform platform_api ref, render render_2d_api ref, context render_2
         render.textures.require_used_count = 0;
     }
 
-    {    
+    {
         stbi_set_flip_vertically_on_load(1);
 
         glBindTexture(GL_TEXTURE_2D, render.sprite_atlas.handle);
@@ -178,7 +178,7 @@ func frame(platform platform_api ref, render render_2d_api ref, context render_2
                 var result = try_platform_read_entire_file(platform, tmemory, path);
                 if not result.ok
                     continue;
-                
+
                 var width  s32;
                 var height s32;
                 var ignored s32;
@@ -200,12 +200,12 @@ func frame(platform platform_api ref, render render_2d_api ref, context render_2
 func get_y_sorted_position(render render_2d_api ref, position vec2, alignemnt = [ 0.5, 0 ] vec2) (result render_2d_position)
 {
     var viewport_y = (position.y * render.context.draw_scale + render.context.draw_offset.y);
-    var depth = (viewport_y / render.context.viewport_size.y) * 0.5;
+    var depth = (viewport_y / render.context.viewport_size.y) * 0.5 + 0.25;
     var result = { position, alignemnt, depth } render_2d_position;
     return result;
 }
 
-func draw_sprite(render render_2d_api ref, sprite_id u32, position render_2d_position, color = [ 1, 1, 1, 1 ] vec4)
+func draw_sprite(render render_2d_api ref, sprite_id u32, position render_2d_position, color = [ 1, 1, 1, 1 ] vec4, flip_x = false, flip_y = false)
 {
     assert(sprite_id);
 
@@ -236,7 +236,7 @@ func draw_sprite(render render_2d_api ref, sprite_id u32, position render_2d_pos
                 found_index = i;
             }
         }
-        
+
         assert(found_index is_not u32_invalid_index);
         var info = cache[found_index] ref;
         info.id          = sprite_id;
@@ -255,6 +255,14 @@ func draw_sprite(render render_2d_api ref, sprite_id u32, position render_2d_pos
     texture_box.min = [ (found_index mod 32) * render_2d_sprite_size, (found_index / 32) * render_2d_sprite_size ] vec2 + 0.5 * texel_scale;
     texture_box.max = v2(render_2d_sprite_size - 1 * texel_scale) + texture_box.min;
 
+    {
+        var blend_flip = [ flip_x cast(f32), flip_y cast(f32) ] vec2;
+        var min = lerp(texture_box.min, texture_box.max, blend_flip);
+        var max = lerp(texture_box.min, texture_box.max, v2(1) - blend_flip);
+        texture_box.min = min;
+        texture_box.max = max;
+    }
+
     var size = v2(1.0); // assume sprites are 1 world unit big
     draw_texture_box(render, position, size, color, render.sprite_atlas, texture_box);
 }
@@ -266,10 +274,10 @@ func draw_texture_box(render render_2d_api ref, position render_2d_position, siz
         render.sprites.require_used_count += 1;
         return;
     }
-    
+
     {
         var used_count = minimum(render.textures.count, render.textures.require_used_count);
-        
+
         var found_texture_index = u32_invalid_index;
         loop var texture_index u32; used_count
         {
@@ -297,14 +305,14 @@ func draw_texture_box(render render_2d_api ref, position render_2d_position, siz
     var sprite = render.sprites[render.sprites.require_used_count] ref;
     render.sprites.require_used_count += 1;
 
-    // sprite.texture_index = found_texture_index;    
+    // sprite.texture_index = found_texture_index;
     sprite.color     = color;
     sprite.pivot     = position.pivot;
     sprite.size      = size;
-    sprite.alignment = position.alignment;    
-    sprite.depth     = position.depth;    
-    sprite.texture_box_min = texture_box.min;    
-    sprite.texture_box_max = texture_box.max;    
+    sprite.alignment = position.alignment;
+    sprite.depth     = position.depth;
+    sprite.texture_box_min = texture_box.min;
+    sprite.texture_box_max = texture_box.max;
 }
 
 func draw_circle(render render_2d_api ref, center vec2, radius f32, depth f32, color = [ 1, 1, 1, 1 ] vec4)
@@ -352,7 +360,7 @@ func execute(render render_2d_api ref, gl gl_api ref, tmemory memory_arena ref)
 
     if sprites.count
     {
-        glUseProgram(render.shader_sprite.handle);            
+        glUseProgram(render.shader_sprite.handle);
 
         // HACK: we only use one texture
         glUniform1i(render.shader_sprite.sprite_texture, 0);
@@ -364,7 +372,7 @@ func execute(render render_2d_api ref, gl gl_api ref, tmemory memory_arena ref)
 
     if circles.count
     {
-        glUseProgram(render.shader_circle.handle);            
+        glUseProgram(render.shader_circle.handle);
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, circles.count cast(u32));
     }
 
