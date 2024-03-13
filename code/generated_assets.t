@@ -34,6 +34,7 @@ enum asset_sprite_id
     kenny_rpg_tile_rpgtile029;
     kenny_rpg_tile_rpgtile030;
     kenny_rpg_tile_rpgtile031;
+    kenny_rpg_tile_rpgtile031_alt;
     kenny_rpg_tile_rpgtile032;
     kenny_rpg_tile_rpgtile033;
     kenny_rpg_tile_rpgtile034;
@@ -233,6 +234,16 @@ enum asset_sprite_id
     kenny_rpg_tile_rpgtile228;
     entity_chicken_back;
     entity_chicken_front;
+    entity_dog_back;
+    entity_dog_front;
+    entity_player_tent_back;
+    entity_player_tent_front;
+    item_fireball;
+    item_flag_blue;
+    item_flag_red;
+    item_sword;
+    item_team_mark_blue;
+    item_team_mark_red;
 }
 
 def asset_sprite_paths =
@@ -269,6 +280,7 @@ def asset_sprite_paths =
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile029.png",
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile030.png",
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile031.png",
+    "assets/tiles/RPG Tiles Vector/PNG/rpgTile031_alt.png",
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile032.png",
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile033.png",
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile034.png",
@@ -468,4 +480,14 @@ def asset_sprite_paths =
     "assets/tiles/RPG Tiles Vector/PNG/rpgTile228.png",
     "assets/entities/chicken_back.png",
     "assets/entities/chicken_front.png",
+    "assets/entities/dog_back.png",
+    "assets/entities/dog_front.png",
+    "assets/entities/player_tent_back.png",
+    "assets/entities/player_tent_front.png",
+    "assets/items/fireball.png",
+    "assets/items/flag_blue.png",
+    "assets/items/flag_red.png",
+    "assets/items/sword.png",
+    "assets/items/team_mark_blue.png",
+    "assets/items/team_mark_red.png",
 ] string[];

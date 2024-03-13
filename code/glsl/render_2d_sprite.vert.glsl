@@ -16,10 +16,10 @@ struct render_2d_gl_sprite
     vec2  size;
     vec2  alignment;
     float depth;
-    float _unused;
-    
+    float rotation;
+
     vec2 texture_box_min;
-    vec2 texture_box_max;    
+    vec2 texture_box_max;
 };
 
 layout (std140, column_major) uniform sprite_buffer
@@ -30,7 +30,7 @@ layout (std140, column_major) uniform sprite_buffer
 out fragment_type
 {
     vec4  color;
-    vec2  uv;    
+    vec2  uv;
 } fragment;
 
 void main()
@@ -39,7 +39,7 @@ void main()
         vec2(0, 0),
         vec2(1, 0),
         vec2(1, 1),
-        
+
         vec2(0, 0),
         vec2(1, 1),
         vec2(0, 1)
@@ -48,14 +48,24 @@ void main()
     render_2d_gl_sprite sprite = sprites[gl_InstanceID];
 
     vec2 blend = vertices[gl_VertexID];
-    
-    vec2 box_min = sprite.pivot - sprite.size * sprite.alignment;
-    vec2 box_max = box_min + sprite.size;    
 
+    vec2 box_min = -sprite.size * sprite.alignment;
+    vec2 box_max = box_min + sprite.size;
+
+    // without pivot and rotation
     vec2 position = mix(box_min, box_max, blend);
 
+    // apply rotation and pivot
+    float cos_rotation = cos(sprite.rotation);
+    float sin_rotation = sin(sprite.rotation);
+    mat2 rotation = mat2(
+        cos_rotation, -sin_rotation,
+        sin_rotation, cos_rotation
+    );
+    position = rotation * position + sprite.pivot;
+
     // to viewport position
-    // TODO: maybe try make it pixel perfect?    
+    // TODO: maybe try make it pixel perfect?
     position = (position * draw_scale + draw_offset);
 
     // float depth = position.y / viewport_size.y;

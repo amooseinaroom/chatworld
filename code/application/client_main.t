@@ -434,6 +434,7 @@ func game_update program_update_type
             var sprite_paths asset_path[];
             asset_paths_append(sprite_paths ref, platform, "assets/tiles/RPG Tiles Vector/PNG/", "kenny_rpg_tile", tmemory);
             asset_paths_append(sprite_paths ref, platform, "assets/entities/", "entity", tmemory);
+            asset_paths_append(sprite_paths ref, platform, "assets/items/", "item", tmemory);
             asset_generate_sprite_ids(sprite_paths, platform, tmemory);
             is_init = true;
         }
@@ -580,12 +581,21 @@ func game_update program_update_type
         {
             init(state.server ref, platform, state.network ref, client.server_address.tag, client.server_address.port, tmemory);
             init(client, state.network ref, client.server_address);
+
+            var result = try_platform_read_entire_file(platform, tmemory, game_world_map_path);
+            if result.ok and (result.data.count is type_byte_count(game_world_tile_map))
+                copy_bytes(client.game.tile_map ref, result.data.base, result.data.count);
+
             state.is_host = true;
         }
 
         if menu_button(menu, location_id(0), font, cursor ref, "Connect")
         {
             init(client, state.network ref, client.server_address);
+
+            var result = try_platform_read_entire_file(platform, tmemory, game_world_map_path);
+            if result.ok and (result.data.count is type_byte_count(game_world_tile_map))
+                copy_bytes(client.game.tile_map ref, result.data.base, result.data.count);
         }
 
         advance_line(font.info, cursor ref);
@@ -888,173 +898,168 @@ func game_update program_update_type
             camera_box.min = game.camera_position - (camera_box_size * 0.5);
             camera_box.max = game.camera_position + camera_box_size;
 
-            // TEST render_2d
-            if true
+            var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
+                        
+            var tile_map = game.tile_map ref;
+
+            var min_tile_x = floor(camera_box.min.x) cast(s32);
+            var min_tile_y = floor(camera_box.min.y) cast(s32);
+            var max_tile_x = ceil(camera_box.max.x) cast(s32);
+            var max_tile_y = ceil(camera_box.max.y) cast(s32);
+
+            loop var y = min_tile_y; max_tile_y
             {
-                var tile_map = game.tile_map ref;
-
-                var min_tile_x = floor(camera_box.min.x) cast(s32);
-                var min_tile_y = floor(camera_box.min.y) cast(s32);
-                var max_tile_x = ceil(camera_box.max.x) cast(s32);
-                var max_tile_y = ceil(camera_box.max.y) cast(s32);
-
-                loop var y = min_tile_y; max_tile_y
-                {
-                    loop var x = min_tile_x; max_tile_x
-                    {
-                        var box box2;
-                        box.min = [ x, y ] vec2;
-                        box.max = box.min + 1;
-                        // var colors = [
-                        //     [ 0.5, 0.1, 0.1, 1.0 ] vec4,
-                        //     [ 0.1, 0.1, 0.5, 1.0 ] vec4,
-                        // ] vec4[];
-
-                        var colors = [
-                            [ 0.5, 1.0, 1.0, 1.0 ] vec4,
-                            [ 1.0, 1.0, 0.5, 1.0 ] vec4,
-                        ] vec4[];
-
-                        var color = colors[(x + y) bit_and 1];
-
-                        var position = { [ x, y ] vec2, {} vec2, 0.99 } render_2d_position;
-                        // draw_texture_box(render, position, v2(1.0), color, {} render_2d_texture, {} box2);
-
-                        var sprite_id = get_sprite(tile_map, x, y);
-                        draw_sprite(render, sprite_id, position); //, color);
-
-                        if false
-                        {
-                        if (x + y) bit_and 1
-                            draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile019, position);
-                        else
-                            draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile024, position);
-                        }
-                    }
-                }
-
-                 // draw colliders
-                {
-                    var index = next_entity_start;
-                    while next_entity(game.base ref, index ref)
-                    {
-                        var entity = game.entity[index];
-                        var animation = game.animation[index] ref;
-
-                        var direction = direction_from_angle(entity.view_direction);
-                        if direction.x > 0.2
-                            animation.flip_x = true;
-                        else if direction.x < -0.2
-                            animation.flip_x = false;
-
-                        if direction.y > 0.2
-                            animation.show_back = true;
-                        else if direction.y < -0.2
-                            animation.show_back = false;
-
-                        var position = get_y_sorted_position(render, entity.position + entity.collider.center, v2(0.5));
-
-                        var sprite_id = asset_sprite_id.none;
-                        var color = [ 1, 1, 1, 1 ] vec4;
-
-                        var flip_y = false;
-
-                        switch game.tag[index]
-                        case game_entity_tag.chicken
-                        {
-                            if animation.show_back
-                                sprite_id = asset_sprite_id.entity_chicken_back;
-                            else
-                                sprite_id = asset_sprite_id.entity_chicken_front;
-
-                            if entity.health <= 0
-                            {
-                                // color = [ 0.4, 0.4, 0.4, 1.0 ] vec4;
-                                flip_y = true;
-                            }
-                        }
-
-                        if sprite_id is_not asset_sprite_id.none
-                        {
-                            draw_sprite(render, sprite_id, position, color, animation.flip_x, flip_y);
-                        }
-                    }
-                }
-
-                loop var i u32; client.player_count
-                {
-                    var player = client.players[i];
-                    var entity = get(game, player.entity_id);
-                    var animation = game.animation[player.entity_id.index_plus_one - 1];
-
-                    var sprite_id = asset_sprite_id.count + animation.show_back cast(u32);
-
-                    var position = get_y_sorted_position(render, entity.position, v2(0.5, 0));
-                    draw_sprite(render, sprite_id, position, to_vec4(player.body_color), animation.flip_x);
-                }
-
-                // draw colliders
-                if false
-                {
-                    var index = next_entity_start;
-                    while next_entity(game.base ref, index ref)
-                    {
-                        var entity = game.entity[index];
-                        var position = { entity.position + entity.collider.center, v2(0.5), 0.98 } render_2d_position;
-
-                        draw_circle(render, position.pivot, entity.collider.radius, position.depth, [ 0.1, 0.1, 1, 0.25 ] vec4);
-                    }
-                }
-
-                break client_online;
-            }
-
-            // TODO: OLD RENDERER TO BE REPLACED
-
-            loop var y; game_world_size.y
-            {
-                loop var x; game_world_size.x
+                loop var x = min_tile_x; max_tile_x
                 {
                     var box box2;
-                    box.min = floor([ x, y ] vec2 * tile_size + tile_offset);
-                    box.max = ceil(box.min + tile_size);
+                    box.min = [ x, y ] vec2;
+                    box.max = box.min + 1;
+                    // var colors = [
+                    //     [ 0.5, 0.1, 0.1, 1.0 ] vec4,
+                    //     [ 0.1, 0.1, 0.5, 1.0 ] vec4,
+                    // ] vec4[];
+
                     var colors = [
-                        [ 127, 25, 25, 255 ] rgba8,
-                        [ 25, 25, 127, 255 ] rgba8,
-                    ] rgba8[];
+                        [ 0.5, 1.0, 1.0, 1.0 ] vec4,
+                        [ 1.0, 1.0, 0.5, 1.0 ] vec4,
+                    ] vec4[];
 
                     var color = colors[(x + y) bit_and 1];
-                    draw_box(ui, game_render_layer.ground, color, box);
+
+                    var transform render_2d_transform;
+                    transform.pivot = [ x, y ] vec2;
+                    transform.depth = 0.99;
+                    // draw_texture_box(render, transform, v2(1.0), color, {} render_2d_texture, {} box2);
+
+                    var sprite_id = get_sprite(tile_map, x, y);
+                    draw_sprite(render, sprite_id, transform); //, color);
+
+                    if false
+                    {
+                    if (x + y) bit_and 1
+                        draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile019, transform);
+                    else
+                        draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile024, transform);
+                    }
                 }
             }
 
-            var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
+            // draw entities
+            {
+                var index = next_entity_start;
+                while next_entity(game.base ref, index ref)
+                {
+                    var entity = game.entity[index];
+                    var animation = game.animation[index] ref;
 
-            var show_capture_the_flag_team_color = client.capture_the_flag.is_running or (client.capture_the_flag.play_time > 0);
+                    var direction = direction_from_angle(entity.view_direction);
+                    if direction.x > 0.2
+                        animation.flip_x = true;
+                    else if direction.x < -0.2
+                        animation.flip_x = false;
+
+                    if direction.y > 0.2
+                        animation.show_back = true;
+                    else if direction.y < -0.2
+                        animation.show_back = false;
+
+                    var transform = get_y_sorted_transform(render, entity.position + entity.collider.center, v2(0.5));
+
+                    var sprite_id = asset_sprite_id.none;
+                    var color = [ 1, 1, 1, 1 ] vec4;
+
+                    switch game.tag[index]
+                    case game_entity_tag.chicken, game_entity_tag.dog_retriever
+                    {                        
+                        switch game.tag[index]
+                        case game_entity_tag.chicken
+                            sprite_id = asset_sprite_id.entity_chicken_back;
+                        case game_entity_tag.dog_retriever
+                        {
+                            sprite_id = asset_sprite_id.entity_dog_back;
+                            
+                            try_draw_team_mark(render, transform, entity.dog_retriever.team_index_plus_one - 1);
+                        }
+
+                        sprite_id += 1 - animation.show_back cast(u32);
+
+                        if entity.health <= 0
+                        {
+                            // color = [ 0.4, 0.4, 0.4, 1.0 ] vec4;
+                            transform.flip_y = true;
+                        }
+                    }                        
+                    case game_entity_tag.healing_altar
+                    {
+                        draw_circle(render, transform.pivot, entity.collider.radius, 0.98, [ 0.1, 1.0, 0.1, 0.25 ] vec4);
+                    }
+                    case game_entity_tag.flag_target
+                    {
+                        draw_circle(render, transform.pivot, entity.collider.radius, 0.98, to_vec4(entity.flag_target.team_color));
+                    }
+                    case game_entity_tag.flag
+                    {
+                        if entity.flag.team_index_plus_one is 1
+                            sprite_id = asset_sprite_id.item_flag_red;
+                        else
+                        {
+                            assert(entity.flag.team_index_plus_one is 2);
+                            sprite_id = asset_sprite_id.item_flag_blue;
+                        }                        
+                    }
+                    case game_entity_tag.player_tent
+                    {                        
+                        sprite_id = asset_sprite_id.entity_player_tent_front;   
+                        color = to_vec4(game.player_tent[index].body_color);
+                    }
+                    case game_entity_tag.hitbox
+                    {
+                        var hitbox = entity.hitbox;
+                        switch hitbox.tag
+                        case game_entity_hitbox_tag.sword
+                        {
+                            sprite_id = asset_sprite_id.item_sword;
+                            // our default view is right
+                            // but sprite default orientation is up
+                            transform.rotation  = entity.view_direction + (pi32 * 0.5);
+                        }
+                        case game_entity_hitbox_tag.fireball
+                        {
+                            sprite_id = asset_sprite_id.item_fireball;
+                            animation.time = fmod(platform.delta_seconds * 2 + animation.time, 1.0);
+                            transform.rotation  = animation.time * 2 * pi32;
+                        }
+                    }
+
+                    transform.flip_x = animation.flip_x;
+
+
+                    if sprite_id is_not asset_sprite_id.none
+                    {
+                        draw_sprite(render, sprite_id, transform, color);
+                    }
+                }
+            }
 
             loop var i u32; client.player_count
             {
                 var player = client.players[i];
                 var entity = get(game, player.entity_id);
+                var animation = game.animation[player.entity_id.index_plus_one - 1];
 
-                var position = entity.position;
+                var sprite_id = asset_sprite_id.count + animation.show_back cast(u32);
 
-                var sprite_texture_box box2;
-                sprite_texture_box.min = [ 0, 0 ] vec2;
-                sprite_texture_box.max = [ 128, 128 ] vec2;
+                var transform = get_y_sorted_transform(render, entity.position, v2(0.5, 0));
+                transform.flip_x = animation.flip_x;
 
-                var player_box = draw_player(ui, position, tile_size, tile_offset, player.body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction, entity.health is 0);
-                draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), player.name_color);
+                if entity.health <= 0
+                    transform.rotation = pi32 * 0.5;
 
-                if show_capture_the_flag_team_color and (entity.player.team_index < 2)
-                {
-                    var pivot = get_point(player_box, [ 0.5, 0.7 ] vec2);
-                    var box box2;
-                    var half_size = ceil(tile_size * 0.125);
-                    box.min = pivot - half_size;
-                    box.max = box.min + (half_size * 2);
-                    draw_box(ui, game_render_layer.entity + 1, entity.player.team_color, box);
-                }
+                draw_sprite(render, sprite_id, transform, to_vec4(player.body_color));
+
+                try_draw_team_mark(render, transform, entity.player.team_index_plus_one - 1);
+
+                var player_box = get_viewport_box(render, transform, v2(1));
 
                 if player.chat_message_timeout > 0
                 label draw_chat_box
@@ -1070,7 +1075,7 @@ func game_update program_update_type
                     if is_contained(text_position, chat_message_frame)
                     {
                     }
-                    else if player.chat_message.is_shouting and (squared_length(position - client.local_player_position) <= (shout_distance * shout_distance))
+                    else if player.chat_message.is_shouting and (squared_length(entity.position - client.local_player_position) <= (shout_distance * shout_distance))
                     {
                         text_position = clamp(text_position, chat_message_frame.min, chat_message_frame.max);
                         text_alignment = (text_position - chat_message_frame.min);
@@ -1152,6 +1157,25 @@ func game_update program_update_type
                 }
             }
 
+            // draw colliders
+            if false
+            {
+                var index = next_entity_start;
+                while next_entity(game.base ref, index ref)
+                {
+                    var entity = game.entity[index];
+                    var transform render_2d_transform;
+                    transform.pivot = entity.position + entity.collider.center;
+
+                    if false
+                        transform.depth = 0.98; // draw below
+                    else
+                        transform.depth = 0.0; // draw on top
+
+                    draw_circle(render, transform.pivot, entity.collider.radius, transform.depth, [ 0.1, 0.1, 1, 0.25 ] vec4);
+                }                                    
+            }        
+
             // actual server send position
             if debug_player_server_position and client.player_count
             {
@@ -1174,106 +1198,6 @@ func game_update program_update_type
 
                 var box = draw_player(ui, position, tile_size, tile_offset, body_color, state.user_sprite_index_plus_one is_not 0, state.user_sprite_texture, sprite_texture_box, state.sprite_view_direction);
                 draw_player_name(ui, font, position, tile_size, tile_offset, to_string(player.name), name_color);
-            }
-
-            loop var i u32; game.entity.count
-            {
-                if game.tag[i] is game_entity_tag.none
-                    continue;
-
-                var entity = game.entity[i] ref;
-
-                switch game.tag[i]
-                case game_entity_tag.hitbox
-                {
-                    switch entity.hitbox.tag
-                    case game_entity_hitbox_tag.fireball
-                    {
-                        var box box2;
-                        box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                        box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-                        var color = [ 255, 128, 25, 255 ] rgba8;
-                        draw_box(ui, game_render_layer.overlay, color, box);
-                    }
-                    case game_entity_hitbox_tag.sword
-                    {
-                        var box box2;
-                        box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                        box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-                        var color = [ 200, 200, 200, 255 ] rgba8;
-                        draw_box(ui, game_render_layer.overlay, color, box);
-                    }
-                    else
-                    {
-                        assert(0);
-                    }
-                }
-                case game_entity_tag.chicken
-                {
-                    var box box2;
-                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-
-                    var alpha = 255 cast(u8);
-                    if entity.health <= 0
-                        alpha = 128; // (clamp(entity.corpse_lifetime / max_corpse_lifetime, 0, 1) * 255) cast(u8);
-
-                    var color = [ 240, 240, 240, alpha ] rgba8;
-                    draw_box(ui, game_render_layer.entity, color, box);
-                }
-                case game_entity_tag.flag
-                {
-                    var box box2;
-                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-
-                    var color = [ 240, 10, 240, 255 ] rgba8;
-                    draw_box(ui, game_render_layer.entity, color, box);
-                    draw_box(ui, game_render_layer.entity + 1, entity.flag.team_color, grow(box, -ceil(tile_size * 0.1)));
-                }
-                case game_entity_tag.dog_retriever
-                {
-                    var box box2;
-                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-
-                    var color = [ 240, 240, 20, 255 ] rgba8;
-                    draw_box(ui, game_render_layer.entity, color, box);
-                    draw_box(ui, game_render_layer.entity + 1, entity.dog_retriever.team_color, grow(box, -ceil(tile_size * 0.1)));
-                }
-                case game_entity_tag.player_tent
-                {
-                    var box box2;
-                    box.min = floor(({ entity.position.x - 0.25, entity.position.y } vec2) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + ([ 0.5, 1 ] vec2 * tile_size));
-
-                    // var alpha = 255 cast(u8);
-                    // if entity.health <= 0
-                        // alpha = (clamp(entity.corpse_lifetime / max_corpse_lifetime, 0, 1) * 255) cast(u8);
-
-                    var tent = game.player_tent[i];
-                    var body_color = tent.body_color;
-                    body_color.a = 128;
-                    draw_box(ui, game_render_layer.ground_overlay, body_color, box);
-                    draw_player_name(ui, font, entity.position, tile_size, tile_offset, to_string(tent.name), tent.name_color);
-                }
-                case game_entity_tag.healing_altar
-                {
-                    var box box2;
-                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-
-                    var color = [ 50, 255, 50, 255 ] rgba8;
-                    draw_box(ui, game_render_layer.ground_overlay, color, box);
-                }
-                case game_entity_tag.flag_target
-                {
-                    var box box2;
-                    box.min = floor(({ entity.position.x, entity.position.y } vec2 - entity.collider.radius) * tile_size) + tile_offset;
-                    box.max = ceil(box.min + (entity.collider.radius * 2 * tile_size));
-
-                    draw_box(ui, game_render_layer.ground_overlay, entity.flag_target.team_color, box);
-                }
             }
 
             if client.player_count
@@ -1381,4 +1305,17 @@ func draw_player(ui ui_system ref, position vec2, tile_size f32, tile_offset vec
     }
 
     return box;
+}
+
+func try_draw_team_mark(render render_2d_api ref, transform render_2d_transform, team_index u32)
+{
+    if team_index < 2
+    {
+        // adjust the depth
+        transform.pivot.y -= 0.25;
+        transform.depth -= 0.01;
+        def team_sprite_ids = [ asset_sprite_id.item_team_mark_red, asset_sprite_id.item_team_mark_blue ] asset_sprite_id[];
+
+        draw_sprite(render, team_sprite_ids[team_index], transform);                    
+    }
 }

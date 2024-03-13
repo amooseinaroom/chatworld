@@ -56,11 +56,14 @@ struct render_2d_texture_buffer
            require_used_count usize;
 }
 
-struct render_2d_position
+struct render_2d_transform
 {
     pivot     vec2;
     alignment vec2;
     depth     f32;
+    rotation  f32;
+    flip_x    b8;
+    flip_y    b8;
 }
 
 struct render_2d_gl_sprite
@@ -70,7 +73,7 @@ struct render_2d_gl_sprite
     size            vec2;
     alignment       vec2;
     depth           f32;
-    _unused         f32;
+    rotation        f32;
     texture_box_min vec2;
     texture_box_max vec2;
 }
@@ -197,15 +200,26 @@ func frame(platform platform_api ref, render render_2d_api ref, context render_2
     }
 }
 
-func get_y_sorted_position(render render_2d_api ref, position vec2, alignemnt = [ 0.5, 0 ] vec2) (result render_2d_position)
+func get_y_sorted_transform(render render_2d_api ref, position vec2, alignemnt = [ 0.5, 0 ] vec2) (result render_2d_transform)
 {
     var viewport_y = (position.y * render.context.draw_scale + render.context.draw_offset.y);
     var depth = (viewport_y / render.context.viewport_size.y) * 0.5 + 0.25;
-    var result = { position, alignemnt, depth } render_2d_position;
+    var result = { position, alignemnt, depth, 0, false, false } render_2d_transform;
     return result;
 }
 
-func draw_sprite(render render_2d_api ref, sprite_id u32, position render_2d_position, color = [ 1, 1, 1, 1 ] vec4, flip_x = false, flip_y = false)
+// TODO: ignores rotation for now
+func get_viewport_box(render render_2d_api ref, transform render_2d_transform, size vec2) (box box2)
+{    
+    var min = transform.pivot + scale(size, -transform.alignment);
+    var max = min + size;
+
+    min = min * render.context.draw_scale + render.context.draw_offset;
+    max = max * render.context.draw_scale + render.context.draw_offset;    
+    return { min, max } box2;
+}
+
+func draw_sprite(render render_2d_api ref, sprite_id u32, transform render_2d_transform, color = [ 1, 1, 1, 1 ] vec4)
 {
     assert(sprite_id);
 
@@ -255,19 +269,11 @@ func draw_sprite(render render_2d_api ref, sprite_id u32, position render_2d_pos
     texture_box.min = [ (found_index mod 32) * render_2d_sprite_size, (found_index / 32) * render_2d_sprite_size ] vec2 + 0.5 * texel_scale;
     texture_box.max = v2(render_2d_sprite_size - 1 * texel_scale) + texture_box.min;
 
-    {
-        var blend_flip = [ flip_x cast(f32), flip_y cast(f32) ] vec2;
-        var min = lerp(texture_box.min, texture_box.max, blend_flip);
-        var max = lerp(texture_box.min, texture_box.max, v2(1) - blend_flip);
-        texture_box.min = min;
-        texture_box.max = max;
-    }
-
     var size = v2(1.0); // assume sprites are 1 world unit big
-    draw_texture_box(render, position, size, color, render.sprite_atlas, texture_box);
+    draw_texture_box(render, transform, size, color, render.sprite_atlas, texture_box);
 }
 
-func draw_texture_box(render render_2d_api ref, position render_2d_position, size vec2, color = [ 1, 1, 1, 1 ] vec4, texture render_2d_texture, texture_box box2)
+func draw_texture_box(render render_2d_api ref, transform render_2d_transform, size vec2, color = [ 1, 1, 1, 1 ] vec4, texture render_2d_texture, texture_box box2)
 {
     if render.sprites.require_used_count >= render.sprites.count
     {
@@ -305,12 +311,21 @@ func draw_texture_box(render render_2d_api ref, position render_2d_position, siz
     var sprite = render.sprites[render.sprites.require_used_count] ref;
     render.sprites.require_used_count += 1;
 
+    {
+        var blend_flip = [ transform.flip_x cast(f32), transform.flip_y cast(f32) ] vec2;
+        var min = lerp(texture_box.min, texture_box.max, blend_flip);
+        var max = lerp(texture_box.min, texture_box.max, v2(1) - blend_flip);
+        texture_box.min = min;
+        texture_box.max = max;
+    }
+
     // sprite.texture_index = found_texture_index;
     sprite.color     = color;
-    sprite.pivot     = position.pivot;
+    sprite.pivot     = transform.pivot;
     sprite.size      = size;
-    sprite.alignment = position.alignment;
-    sprite.depth     = position.depth;
+    sprite.alignment = transform.alignment;
+    sprite.depth     = transform.depth;
+    sprite.rotation  = transform.rotation;
     sprite.texture_box_min = texture_box.min;
     sprite.texture_box_max = texture_box.max;
 }

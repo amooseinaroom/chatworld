@@ -232,12 +232,14 @@ func try_remove_acknowledged_message(server game_server ref, message_index u32) 
 }
 
 def server_user_path = "server_users.bin";
+def game_world_map_path = "world_map.bin";
 
 def capture_the_flag_team_colors =
 [
     [ 255, 0,   0, 255 ] rgba8,
     [   0, 0, 255, 255 ] rgba8
 ] rgba8[];
+
 
 func init(server game_server ref, platform platform_api ref, network platform_network ref, address_tag platform_network_address_tag, server_port u16, tmemory memory_arena ref)
 {
@@ -276,6 +278,8 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
 
         server.capture_the_flag.dog_id[team_index] = add_dog_retriever(server.game ref, new_network_id(server), healing_altar_position, team_index, capture_the_flag_team_colors[team_index], healing_altar_position, server.capture_the_flag.flag_position[team_index]);
     }
+
+    platform_write_entire_file(platform, game_world_map_path, value_to_u8_array(server.game.tile_map));
 }
 
 func save(platform platform_api ref, server game_server ref)
@@ -528,9 +532,9 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         sword.collider = { {} vec2, 0.4 } sphere2;
                         sword.hitbox.tag = game_entity_hitbox_tag.sword;
                         sword.hitbox.source_id = client.entity_id;
-                        sword.hitbox.collision_mask = bit_not (bit64(game_entity_tag.none) bit_or bit64(game_entity_tag.hitbox));
+                        sword.hitbox.collision_mask = bit_not (bit64(game_entity_tag.none) bit_or bit64(game_entity_tag.hitbox) bit_or bit64(game_entity_tag.wall));
                         sword.hitbox.damage = 3;
-                        sword.view_direction = entity.view_direction;
+                        sword.hitbox.sword_view_direction = entity.view_direction;
                     }
                     else if player.sword_swing_progress < 0.5
                     {
@@ -908,7 +912,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     while next_client(server, client ref)
                     {
                         var player = get(server.game ref, client.entity_id);
-                        player.player.team_index = u32_invalid_index;
+                        player.player.team_index_plus_one = team_index_plus_one_no_team;
                     }
                 }
 
@@ -933,7 +937,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
 
                         capture_the_flag.player_count[team_index] += 1;
 
-                        player.player.team_index = team_index;
+                        player.player.team_index_plus_one = team_index + 1;
                     }
                 }
 
@@ -946,7 +950,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                 while next_client(server, client ref)
                 {
                     var player = get(server.game ref, client.entity_id);
-                    var team_index = player.player.team_index;
+                    var team_index = player.player.team_index_plus_one - 1;
 
                     var color rgba8;
                     if team_index < capture_the_flag_team_colors.count
@@ -958,7 +962,7 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                         else
                         {
                             team_index = u32_invalid_index;
-                            player.player.team_index = u32_invalid_index;
+                            player.player.team_index_plus_one = team_index_plus_one_no_team;
                         }
                     }
 
@@ -970,8 +974,8 @@ func tick(platform platform_api ref, server game_server ref, network platform_ne
                     var message network_message_union;
                     message.tag = network_message_tag.capture_the_flag_player_team;
                     message.capture_the_flag_player_team.entity_network_id = client.entity_network_id;
-                    message.capture_the_flag_player_team.team_index        = team_index;
-                    message.capture_the_flag_player_team.team_color        = color;
+                    message.capture_the_flag_player_team.team_index_plus_one = team_index + 1;
+                    message.capture_the_flag_player_team.team_color          = color;
                     queue(server, message);
                 }
 

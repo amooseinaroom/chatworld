@@ -82,6 +82,7 @@ struct game_client_state
 
 struct game_entity_animation
 {
+    time      f32;
     flip_x    b8;
     show_back b8;
 }
@@ -478,7 +479,10 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
 
                 var entity_id = find_network_entity(game, message.network_id);
                 if not entity_id.value
+                {
                     entity_id = add(game, message.tag, message.network_id);
+                    client.game.animation[entity_id.index_plus_one - 1] = {} game_entity_animation;
+                }
 
                 var entity = get(game, entity_id);
                 entity deref = message.entity;
@@ -557,7 +561,7 @@ func tick(client game_client ref, network platform_network ref, delta_seconds f3
                 if entity_id.value
                 {
                     var player = get(game, entity_id);
-                    player.player.team_index = message.team_index;
+                    player.player.team_index_plus_one = message.team_index_plus_one;
                     player.player.team_color = message.team_color;
                 }
             }

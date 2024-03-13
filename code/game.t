@@ -69,6 +69,8 @@ def max_entity_count = (1 bit_shift_left 14) cast(u32);
 def game_world_width = 256 cast(s32);
 def game_world_size  = [ game_world_width, game_world_width ] vec2;
 
+def team_index_plus_one_no_team = 0 cast(u32);
+
 type game_entity_id union
 {
     expand pair struct
@@ -120,6 +122,8 @@ struct game_entity
             tag game_entity_hitbox_tag;
             remove_on_hit  b8;
             fixed_movement b8;
+
+            sword_view_direction f32;
         };
 
         player struct
@@ -132,7 +136,7 @@ struct game_entity
 
             healed_health_while_knocked_down s32;
 
-            team_index u32;
+            team_index_plus_one u32;
             team_color rgba8;
 
             // send back to client, for better prediction
@@ -141,15 +145,15 @@ struct game_entity
 
         flag_target struct
         {
-            team_index u32;
+            team_index_plus_one u32;
             team_color rgba8;
             has_scored_flag b8;
         };
 
         flag struct
         {
-            team_index u32;
-            team_color rgba8;
+            team_index_plus_one u32;
+            team_color          rgba8;
         };
 
         dog_retriever struct
@@ -159,7 +163,7 @@ struct game_entity
             player_target_position vec2;
             flag_target_position   vec2;
             target_position        vec2;
-            team_index             u32;
+            team_index_plus_one    u32;
             team_color             rgba8;
 
             state game_entity_dog_retreiver_state;
@@ -189,6 +193,7 @@ enum game_entity_tag u8
     player;
     player_tent;
     hitbox;
+    wall; // mainly for collision detection
     chicken;
     flag;
     flag_target;
@@ -322,16 +327,28 @@ func add_healing_altar(game game_state ref, network_id game_entity_network_id, p
     var entity = get(game, id);
     entity.collider = { {} vec2, 1.5 } sphere2;
     entity.position = position;
+
+    // TEMP:
+    var min_tile = v2s(maximum(v2(0), floor(position + entity.collider.center - entity.collider.radius)));
+    var max_tile = v2s(minimum(v2(game_world_width), ceil(position + entity.collider.center + entity.collider.radius)));
+    loop var y = min_tile.y; max_tile.y
+    {
+        loop var x = min_tile.x; max_tile.x
+        {
+            game.tile_map[y][x] = game_world_tile.ground;
+        }
+    }
 }
 
 func add_flag(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8) (id game_entity_id)
 {
+    assert(team_index < 2);
     var id = add(game, game_entity_tag.flag, network_id);
 
     var entity = get(game, id);
     entity.collider = { {} vec2, 0.25 } sphere2;
     entity.position = position;
-    entity.flag.team_index = team_index;
+    entity.flag.team_index_plus_one = team_index + 1;
     entity.flag.team_color = team_color;
 
     return id;
@@ -339,28 +356,41 @@ func add_flag(game game_state ref, network_id game_entity_network_id, position v
 
 func add_flag_target(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8) (id game_entity_id)
 {
+    assert(team_index < 2);
     var id = add(game, game_entity_tag.flag_target, network_id);
 
     var entity = get(game, id);
     entity.collider = { {} vec2, 1.5 } sphere2;
     entity.position = position;
-    entity.flag_target.team_index = team_index;
+    entity.flag_target.team_index_plus_one = team_index + 1;
     entity.flag_target.team_color = team_color;
     entity.flag_target.team_color.a = 128;
+
+    // TEMP:
+    var min_tile = v2s(maximum(v2(0), floor(position + entity.collider.center - entity.collider.radius)));
+    var max_tile = v2s(minimum(v2(game_world_width), ceil(position + entity.collider.center + entity.collider.radius)));
+    loop var y = min_tile.y; max_tile.y
+    {
+        loop var x = min_tile.x; max_tile.x
+        {
+            game.tile_map[y][x] = game_world_tile.ground;
+        }
+    }
 
     return id;
 }
 
 func add_dog_retriever(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8, player_target_position vec2, flag_target_position vec2) (id game_entity_id)
 {
-    var id = add(game, game_entity_tag.dog_retriever, network_id);
+    assert(team_index < 2);
+    var id = add(game, game_entity_tag.dog_retriever, network_id);    
 
     var entity = get(game, id);
     entity.collider = { {} vec2, 0.33 } sphere2;
     entity.position = position;
     entity.max_health = 1;
     entity.health = entity.max_health;
-    entity.dog_retriever.team_index = team_index;
+    entity.dog_retriever.team_index_plus_one = team_index + 1;
     entity.dog_retriever.team_color = team_color;
     entity.dog_retriever.player_target_position = player_target_position;
     entity.dog_retriever.flag_target_position   = flag_target_position;
@@ -621,9 +651,10 @@ func update(game game_state ref, delta_seconds f32)
                 else
                 {
                     // var angle = sword.view_direction; // pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
-                    var angle = pi32 * (player.sword_swing_progress - 0.5) + sword.view_direction;
+                    var angle = pi32 * (player.sword_swing_progress - 0.5) + sword.hitbox.sword_view_direction;
                     var target_position = direction_from_angle(angle) * (entity.collider.radius + sword.collider.radius) + entity.position + entity.collider.center;
                     sword.movement = target_position - sword.position;
+                    sword.view_direction = angle;
                     game.do_update_tick_count[player.sword_hitbox_id.index_plus_one - 1] = 2;
 
                     if player.sword_swing_progress < 1
@@ -734,7 +765,7 @@ func update(game game_state ref, delta_seconds f32)
             var radius   = entity.collider.radius;
 
             var target_mask = bit64(game_entity_tag.flag);
-            var team_index = target.team_index;
+            var team_index = target.team_index_plus_one - 1;
 
             loop var other_index u32; game.entity.count
             {
@@ -742,7 +773,7 @@ func update(game game_state ref, delta_seconds f32)
                     continue;
 
                 var other = game.entity[other_index] ref;
-                if other.flag.team_index is team_index
+                if (other.flag.team_index_plus_one - 1) is team_index
                     continue;
 
                 // only score if not dragged
@@ -780,7 +811,7 @@ func update(game game_state ref, delta_seconds f32)
             case game_entity_dog_retreiver_state.search
             {
                 var target_mask = bit64(game_entity_tag.flag) bit_or bit64(game_entity_tag.player);
-                var team_index = dog_retriever.team_index;
+                var team_index = dog_retriever.team_index_plus_one - 1;
 
                 var closest_distance_squared = 10000.0;
                 var closest_entiy_index = u32_invalid_index;
@@ -807,14 +838,14 @@ func update(game game_state ref, delta_seconds f32)
                     switch game.tag[other_index]
                     case game_entity_tag.flag
                     {
-                        other_team_index = other.flag.team_index;
+                        other_team_index = other.flag.team_index_plus_one - 1;
 
                         if squared_length(other_position - dog_retriever.flag_target_position) < (pick_radius * pick_radius)
                             continue;
                     }
                     case game_entity_tag.player
                     {
-                        other_team_index = other.player.team_index;
+                        other_team_index = other.player.team_index_plus_one - 1;
 
                         if squared_length(other_position - dog_retriever.player_target_position) < (pick_radius * pick_radius)
                             continue;
@@ -928,7 +959,8 @@ func update(game game_state ref, delta_seconds f32)
         }
 
         // simple world bounds
-        check_world_collision(game, entity, delta_seconds);
+        if (game.tag[i] is_not game_entity_tag.hitbox) or (entity.hitbox.collision_mask bit_and bit64(game_entity_tag.wall))
+            check_world_collision(game, entity, delta_seconds);
 
         // update next two ticks if entity moved
         // this way we send the predicted position and one final rest idle position

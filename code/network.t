@@ -210,9 +210,9 @@ struct network_message_capture_the_flag_player_team
 {
     expand base network_message_base;
 
-    entity_network_id game_entity_network_id;
-    team_index        u32;
-    team_color        rgba8;
+    entity_network_id   game_entity_network_id;
+    team_index_plus_one u32;
+    team_color          rgba8;
 }
 
 type network_message_union union
