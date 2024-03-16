@@ -15,6 +15,7 @@ struct program_state
     expand default default_program_state;
 
     render_2d render_2d_api;
+    dynamic_font render_2d_font;
 
     network platform_network;
 
@@ -891,6 +892,73 @@ func game_update program_update_type
                 copy_array({ state.custom_sprite_paths.count, sprite_paths.base + asset_sprite_paths.count } string[], state.custom_sprite_paths);
 
                 frame(platform, render, context, sprite_paths, tmemory);
+
+                var font_paths =
+                [
+                    "C:/work/games/chatworld/assets/fonts/stanberry/Stanberry.ttf", 
+                    "C:/work/games/chatworld/assets/fonts/dinomouse/Dinomouse-Regular.otf",
+                    "C:/work/games/chatworld/assets/fonts/Kosugi_Maru/KosugiMaru-Regular.ttf",
+                ] string[];
+
+                font_frame(platform, render, state.dynamic_font ref, font_paths, tmemory);
+            }
+
+            var dfont = state.dynamic_font ref;
+            dfont.settings.pixel_height = 23;
+            dfont.settings.font_index   = 0;
+            dfont.cursor.baseline_x = 100;
+            dfont.cursor.baseline_y = (ui.viewport_size.y - 100) cast(s32);
+            dfont.cursor.line_start_x = dfont.cursor.baseline_x;
+            dfont.cursor.depth = 0.01;
+
+            var global text_rotation f32;
+            text_rotation = fmod(text_rotation + platform.delta_seconds, 1.0);
+
+            draw_text(render, dfont, "hello\n");
+            dfont.settings.font_index = 1;
+            draw_text(render, dfont, "hello\n");
+            dfont.settings.font_index = 0;
+            dfont.settings.pixel_height = 47;
+            draw_text(render, dfont, "hello\n");
+
+            dfont.settings.font_index = 2;
+            dfont.settings.pixel_height = 47;
+            {                
+                var text = "πポゴの時間だ\n";
+                var letter_count u32;
+                while text.count
+                {
+                    var phase = 1.0 + text_rotation - (0.05 * letter_count);
+                    var color color_hsva;
+                    color.hue = fmod(phase, 1.0);
+                    color.saturation = 1.0;
+                    color.value = 1.0;
+                    color.alpha = 1.0;
+                    evaluate(color ref);
+                    var rainbow = color.color;
+
+                    var letter_text = text;
+                    letter_text.count = utf8_advance(text ref).byte_count;
+
+                    var rotation = text_rotation * 2 * pi32;
+
+                    var offset = (sin(2 * pi32 * phase) * 32) cast(s32); 
+                    //dfont.cursor.baseline_x += offset;
+                    dfont.cursor.baseline_y += offset;
+
+                    draw_text(render, v2(0.5), sin(2 * pi32 * phase) * 0.5 + 1, dfont, rainbow, letter_text);
+                    //dfont.cursor.baseline_x -= offset;
+                    dfont.cursor.baseline_y -= offset;
+                    letter_count += 1;
+                }
+            }
+
+            {
+                var transform render_2d_transform;
+                transform.pivot = game.camera_position;
+                transform.alignment = v2(0.5);
+                transform.depth = 0.01;
+                draw_texture_box(render, transform, v2(10), dfont.atlas, [ v2(0), v2(1) ] box2);
             }
 
             var camera_box box2;
@@ -899,7 +967,7 @@ func game_update program_update_type
             camera_box.max = game.camera_position + camera_box_size;
 
             var chat_message_frame = grow(ui.scissor_box, -floor(tile_size * 0.25));
-                        
+
             var tile_map = game.tile_map ref;
 
             var min_tile_x = floor(camera_box.min.x) cast(s32);
@@ -970,14 +1038,14 @@ func game_update program_update_type
 
                     switch game.tag[index]
                     case game_entity_tag.chicken, game_entity_tag.dog_retriever
-                    {                        
+                    {
                         switch game.tag[index]
                         case game_entity_tag.chicken
                             sprite_id = asset_sprite_id.entity_chicken_back;
                         case game_entity_tag.dog_retriever
                         {
                             sprite_id = asset_sprite_id.entity_dog_back;
-                            
+
                             try_draw_team_mark(render, transform, entity.dog_retriever.team_index_plus_one - 1);
                         }
 
@@ -988,7 +1056,7 @@ func game_update program_update_type
                             // color = [ 0.4, 0.4, 0.4, 1.0 ] vec4;
                             transform.flip_y = true;
                         }
-                    }                        
+                    }
                     case game_entity_tag.healing_altar
                     {
                         draw_circle(render, transform.pivot, entity.collider.radius, 0.98, [ 0.1, 1.0, 0.1, 0.25 ] vec4);
@@ -1005,11 +1073,11 @@ func game_update program_update_type
                         {
                             assert(entity.flag.team_index_plus_one is 2);
                             sprite_id = asset_sprite_id.item_flag_blue;
-                        }                        
+                        }
                     }
                     case game_entity_tag.player_tent
-                    {                        
-                        sprite_id = asset_sprite_id.entity_player_tent_front;   
+                    {
+                        sprite_id = asset_sprite_id.entity_player_tent_front;
                         color = to_vec4(game.player_tent[index].body_color);
                     }
                     case game_entity_tag.hitbox
@@ -1173,8 +1241,8 @@ func game_update program_update_type
                         transform.depth = 0.0; // draw on top
 
                     draw_circle(render, transform.pivot, entity.collider.radius, transform.depth, [ 0.1, 0.1, 1, 0.25 ] vec4);
-                }                                    
-            }        
+                }
+            }
 
             // actual server send position
             if debug_player_server_position and client.player_count
@@ -1316,6 +1384,6 @@ func try_draw_team_mark(render render_2d_api ref, transform render_2d_transform,
         transform.depth -= 0.01;
         def team_sprite_ids = [ asset_sprite_id.item_team_mark_red, asset_sprite_id.item_team_mark_blue ] asset_sprite_id[];
 
-        draw_sprite(render, team_sprite_ids[team_index], transform);                    
+        draw_sprite(render, team_sprite_ids[team_index], transform);
     }
 }
