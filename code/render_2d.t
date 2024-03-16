@@ -6,6 +6,7 @@ import math;
 import memory;
 import platform;
 import string;
+import meta;
 import stb_image;
 import stb_truetype;
 
@@ -13,21 +14,25 @@ struct render_2d_api
 {
     context render_2d_context;
 
+    shaders  render_2d_shader_buffer;
     textures render_2d_texture_buffer;
     sprites  render_2d_gl_sprite_buffer;
     circles  render_2d_gl_circle_buffer;
 
-    shader_sprite render_2d_shader_sprite;
-    shader_circle render_2d_shader_circle;
+    shader_sprite render_2d_shader;
+    shader_circle render_2d_shader;
+    shader_sprite_info render_2d_shader_info;
+    shader_circle_info render_2d_shader_info;
 
     gl_empty_vertex_array u32;
 
-    context_buffer gl_uniform_buffer;
-    sprite_buffer  gl_uniform_buffer;
-    circle_buffer  gl_uniform_buffer;
+    context_buffer gl_uniform_buffer2;
+    sprite_buffer  gl_uniform_buffer2;
+    circle_buffer  gl_uniform_buffer2;
 
     sprite_cache render_2d_sprite_info[32 * 32];
     sprite_atlas render_2d_texture;
+    sprite_atlas_texture_index u32;
 }
 
 def render_2d_sprite_size = 64 cast(s32);
@@ -44,7 +49,27 @@ struct render_2d_context
     viewport_size vec2;
     draw_offset   vec2;
     draw_scale    f32;
-    _unused0      f32;
+    min_alpha     f32;
+}
+
+struct render_2d_shader_info
+{
+    vertex_source_write_timestamp   u64;
+    fragment_source_write_timestamp u64;
+    shader_index                    u32;
+}
+
+struct render_2d_shader
+{
+    handle u32;
+
+    main_texture s32;
+}
+
+struct render_2d_shader_buffer
+{
+    expand base           render_2d_shader[];
+           required_count usize;
 }
 
 struct render_2d_texture
@@ -54,8 +79,8 @@ struct render_2d_texture
 
 struct render_2d_texture_buffer
 {
-    expand base               render_2d_texture[];
-           require_used_count usize;
+    expand base           render_2d_texture[];
+           required_count usize;
 }
 
 struct render_2d_glyph
@@ -95,6 +120,7 @@ struct render_2d_font
     cursor   render_2d_font_cursor;
 
     atlas            render_2d_texture;
+    atlas_texture_index u32;
     atlas_x          s32;
     atlas_y          s32;
     atlas_row_height s32;
@@ -140,8 +166,9 @@ struct render_2d_gl_sprite
 struct render_2d_gl_sprite_buffer
 {
     expand base               render_2d_gl_sprite[];
+           shader_index       u32[];
            texture_index      u32[];
-           require_used_count usize;
+           required_count usize;
 }
 
 struct render_2d_gl_circle
@@ -155,7 +182,9 @@ struct render_2d_gl_circle
 struct render_2d_gl_circle_buffer
 {
     expand base               render_2d_gl_circle[];
-           require_used_count usize;
+           shader_index       u32[];
+           texture_index      u32[];
+           required_count usize;
 }
 
 enum render_2d_gl_buffer
@@ -168,6 +197,7 @@ enum render_2d_gl_buffer
 enum render_2d_gl_vertex_attribute
 {
 }
+
 
 struct render_2d_shader_sprite
 {
@@ -190,44 +220,91 @@ func init(render render_2d_api ref, gl gl_api ref, tmemory memory_arena ref)
 {
     glGenVertexArrays(1, render.gl_empty_vertex_array ref);
 
-    var result = reload_shader(gl, render.shader_sprite, "render 2d sprite", get_type_info(render_2d_gl_vertex_attribute), get_type_info(render_2d_gl_buffer), render_2d_gl_shader_sprite_vert, false, render_2d_gl_shader_sprite_frag, tmemory);
-    assert(result.ok, "shader error: %", result.error_messages);
+    resize_buffer(gl, render.context_buffer ref, render_2d_gl_buffer.context_buffer, {} render_2d_context[]);
+    resize_buffer(gl, render.sprite_buffer ref, render_2d_gl_buffer.sprite_buffer, {} render_2d_gl_sprite[]);
+    resize_buffer(gl, render.circle_buffer ref, render_2d_gl_buffer.circle_buffer, {} render_2d_gl_circle[]);
 
-    result = reload_shader(gl, render.shader_circle, "render 2d circle", get_type_info(render_2d_gl_vertex_attribute), get_type_info(render_2d_gl_buffer), render_2d_gl_shader_circle_vert, false, render_2d_gl_shader_circle_frag, tmemory);
-    assert(result.ok, "shader error: %", result.error_messages);
+    // load shaders from embedded text on release
+    if not lang_debug
+    {
+        var result = reload_shader(gl, render.shader_sprite ref, "render 2d sprite", get_type_info(render_2d_gl_vertex_attribute), get_type_info(render_2d_gl_buffer), render_2d_gl_shader_sprite_vert, false, render_2d_gl_shader_sprite_frag, tmemory);
+        require(result.ok);
+
+        result = reload_shader(gl, render.shader_circle ref, "render 2d sprite", get_type_info(render_2d_gl_vertex_attribute), get_type_info(render_2d_gl_buffer), render_2d_gl_shader_sprite_vert, false, render_2d_gl_shader_sprite_frag, tmemory);
+        require(result.ok);
+    }
 
     render.sprite_atlas.base = gl_create_texture_2d(2048, 2048, {} u8[]);
 }
 
-func frame(platform platform_api ref, render render_2d_api ref, context render_2d_context, sprite_paths string[], tmemory memory_arena ref)
+func frame(platform platform_api ref, gl gl_api ref, render render_2d_api ref, context render_2d_context, sprite_paths string[], tmemory memory_arena ref)
 {
     render.context = context;
 
     {
         render.sprites.base = {} render_2d_gl_sprite[];
+        render.sprites.shader_index = {} u32[];
         render.sprites.texture_index = {} u32[];
-        var count = maximum(render.sprites.count, render.sprites.require_used_count * 2);
+
+        var count = maximum(render.sprites.count, render.sprites.required_count * 2);
+
         reallocate_array(tmemory, render.sprites.base ref, count);
+        reallocate_array(tmemory, render.sprites.shader_index ref, count);
         reallocate_array(tmemory, render.sprites.texture_index ref, count);
-        render.sprites.require_used_count = 0;
+
+        render.sprites.required_count = 0;
     }
 
     {
         render.circles.base = {} render_2d_gl_circle[];
-        reallocate_array(tmemory, render.circles.base ref, maximum(render.circles.count, render.circles.require_used_count * 2));
-        render.circles.require_used_count = 0;
+        render.circles.shader_index = {} u32[];
+        render.circles.texture_index = {} u32[];
+
+        var count = maximum(render.circles.count, render.circles.required_count * 2);
+
+        reallocate_array(tmemory, render.circles.base ref, count);
+        reallocate_array(tmemory, render.circles.shader_index ref, count);
+        reallocate_array(tmemory, render.circles.texture_index ref, count);
+        render.circles.required_count = 0;
+    }
+
+    {
+        render.shaders.base = {} render_2d_shader[];
+
+        var shader_count = maximum(32, render.shaders.count);
+
+        if render.shaders.required_count > render.shaders.count
+            shader_count *= 2;
+
+        reallocate_array(tmemory, render.shaders.base ref, shader_count);
+        render.shaders.required_count = 0;
+        clear(to_u8_array(render.shaders.base));
     }
 
     {
         render.textures.base = {} render_2d_texture[];
         var texture_count = maximum(32, render.textures.count);
 
-        if render.textures.require_used_count > render.textures.count
+        if render.textures.required_count > render.textures.count
             texture_count *= 2;
 
         reallocate_array(tmemory, render.textures.base ref, texture_count);
-        render.textures.require_used_count = 0;
+        render.textures.required_count = 0;
+        clear(to_u8_array(render.textures.base));
     }
+
+    var tmemory_frame = temporary_begin(tmemory);
+
+    // hot reload shaders while deubbing
+    if lang_debug
+    {
+        frame_shader(platform, gl, render, render.shader_sprite ref, render.shader_sprite_info ref, "render 2d sprite", "code/glsl/render_2d_sprite.vert.glsl", "code/glsl/render_2d_sprite.frag.glsl", tmemory);
+
+        frame_shader(platform, gl, render, render.shader_circle ref, render.shader_circle_info ref, "render 2d circle", "code/glsl/render_2d_circle.vert.glsl", "code/glsl/render_2d_circle.frag.glsl", tmemory);
+    }
+
+    render.shader_sprite_info.shader_index = get_shader_index(render, render.shader_sprite);
+    render.shader_circle_info.shader_index = get_shader_index(render, render.shader_circle);
 
     {
         stbi_set_flip_vertically_on_load(1);
@@ -261,6 +338,104 @@ func frame(platform platform_api ref, render render_2d_api ref, context render_2
 
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+
+    render.sprite_atlas_texture_index = get_texture_index(render, render.sprite_atlas);
+
+    temporary_end(tmemory, tmemory_frame);
+}
+
+func frame_shader(platform platform_api ref, gl gl_api ref, render render_2d_api ref, shader render_2d_shader ref, info render_2d_shader_info ref, name string, vertex_source_path string, fragment_source_path string, tmemory memory_arena ref) (ok b8)
+{
+    var vertex_source string;
+    var fragment_source string;
+
+    var ok = true;
+    var file_info = platform_get_file_info(platform, vertex_source_path);
+    ok and= file_info.ok and (file_info.write_timestamp is_not info.vertex_source_write_timestamp);
+    if ok
+        info.vertex_source_write_timestamp = file_info.write_timestamp;
+
+    file_info = platform_get_file_info(platform, fragment_source_path);
+    ok or= file_info.ok and (file_info.write_timestamp is_not info.fragment_source_write_timestamp);
+    if ok
+        info.fragment_source_write_timestamp = file_info.write_timestamp;
+
+    if ok
+    {
+        var result = try_platform_read_entire_file(platform, tmemory, vertex_source_path);
+        ok and= result.ok;
+        vertex_source = result.data;
+    }
+
+    if ok
+    {
+        var result = try_platform_read_entire_file(platform, tmemory, fragment_source_path);
+        ok and= result.ok;
+        fragment_source = result.data;
+    }
+
+    if ok
+    {
+        var result = reload_shader(gl, shader, name, get_type_info(render_2d_gl_vertex_attribute), get_type_info(render_2d_gl_buffer), vertex_source, false, fragment_source, tmemory);
+        ok and= result.ok;
+    }
+
+    return ok;
+}
+
+func get_shader_index(render render_2d_api ref, shader render_2d_shader) (shader_index u32)
+{
+    var found_shader_index = u32_invalid_index;
+    var used_count = minimum(render.shaders.count, render.shaders.required_count);
+    loop var shader_index u32; used_count
+    {
+        if render.shaders[shader_index].handle is shader.handle
+        {
+            found_shader_index = shader_index;
+            break;
+        }
+    }
+
+    if found_shader_index is u32_invalid_index
+    {
+        render.shaders.required_count += 1;
+
+        if render.shaders.required_count < render.shaders.count
+        {
+            found_shader_index = (render.shaders.required_count - 1) cast(u32);
+            render.shaders[found_shader_index] = shader;
+        }
+    }
+
+    return found_shader_index;
+}
+
+func get_texture_index(render render_2d_api ref, texture render_2d_texture) (texture_index u32)
+{
+    var found_texture_index = u32_invalid_index;
+    var used_count = minimum(render.textures.count, render.textures.required_count);
+    loop var texture_index u32; used_count
+    {
+        if render.textures[texture_index].handle is texture.handle
+        {
+            found_texture_index = texture_index;
+            break;
+        }
+    }
+
+    if found_texture_index is u32_invalid_index
+    {
+        render.textures.required_count += 1;
+
+        if render.textures.required_count < render.textures.count
+        {
+            found_texture_index = (render.textures.required_count - 1) cast(u32);
+            render.textures.required_count += 1;
+            render.textures[found_texture_index] = texture;
+        }
+    }
+
+    return found_texture_index;
 }
 
 func get_y_sorted_transform(render render_2d_api ref, position vec2, alignemnt = [ 0.5, 0 ] vec2) (result render_2d_transform)
@@ -285,7 +460,7 @@ func get_world_point(render render_2d_api ref, viewport_point vec2) (point vec2)
 }
 
 func get_viewport_box(render render_2d_api ref, transform render_2d_transform, size vec2) (box box2)
-{    
+{
     var a = transform.pivot + scale(size, -transform.alignment);
     var min = get_viewport_point(render, a);
     var max = get_viewport_point(render, a + size);
@@ -293,9 +468,12 @@ func get_viewport_box(render render_2d_api ref, transform render_2d_transform, s
     return { min, max } box2;
 }
 
-func draw_sprite(render render_2d_api ref, sprite_id u32, transform render_2d_transform, color = [ 1, 1, 1, 1 ] vec4)
+func draw_sprite(render render_2d_api ref, sprite_id u32, shader_index u32 = u32_invalid_index, transform render_2d_transform, color = [ 1, 1, 1, 1 ] vec4)
 {
     assert(sprite_id);
+
+    if shader_index is u32_invalid_index
+        shader_index = render.shader_sprite_info.shader_index;
 
     var cache = render.sprite_cache ref;
     var found_index = u32_invalid_index;
@@ -344,46 +522,31 @@ func draw_sprite(render render_2d_api ref, sprite_id u32, transform render_2d_tr
     texture_box.max = v2(render_2d_sprite_size - 1 * texel_scale) + texture_box.min;
 
     var size = v2(1.0); // assume sprites are 1 world unit big
-    draw_texture_box(render, transform, size, color, render.sprite_atlas, texture_box);
+    draw_texture_box(render, shader_index, transform, size, color, render.sprite_atlas_texture_index, texture_box);
 }
 
-func draw_texture_box(render render_2d_api ref, transform render_2d_transform, size vec2, color = [ 1, 1, 1, 1 ] vec4, texture render_2d_texture, texture_box box2)
+func draw_texture_box(render render_2d_api ref, shader_index = u32_invalid_index, transform render_2d_transform, size vec2, color = [ 1, 1, 1, 1 ] vec4, texture_index u32, texture_box box2)
 {
-    if render.sprites.require_used_count >= render.sprites.count
-    {
-        render.sprites.require_used_count += 1;
+    render.sprites.required_count += 1;
+
+    if shader_index is u32_invalid_index
+        shader_index = render.shader_sprite_info.shader_index;
+
+    if shader_index >= render.shaders.count
         return;
-    }
-    
-    var found_texture_index = u32_invalid_index;
-    {
-        var used_count = minimum(render.textures.count, render.textures.require_used_count);
-        loop var texture_index u32; used_count
-        {
-            if render.textures[texture_index].handle is texture.handle
-            {
-                found_texture_index = texture_index;
-                break;
-            }
-        }
 
-        if found_texture_index is u32_invalid_index
-        {
-            if render.textures.require_used_count >= render.textures.count
-            {
-                render.textures.require_used_count += 1;
-                return;
-            }
+    if texture_index >= render.textures.count
+        return;
 
-            found_texture_index = render.textures.require_used_count cast(u32);
-            render.textures.require_used_count += 1;
-            render.textures[found_texture_index] = texture;
-        }
-    }
+    if render.sprites.required_count > render.sprites.count
+        return;
 
-    var sprite = render.sprites[render.sprites.require_used_count] ref;
-    render.sprites.texture_index[render.sprites.require_used_count] = found_texture_index;
-    render.sprites.require_used_count += 1;
+    assert(shader_index < render.shaders.required_count);
+    assert(texture_index < render.textures.required_count);
+
+    var sprite = render.sprites[render.sprites.required_count - 1] ref;
+    render.sprites.shader_index[render.sprites.required_count - 1]  = shader_index;
+    render.sprites.texture_index[render.sprites.required_count - 1] = texture_index;
 
     {
         var blend_flip = [ transform.flip_x cast(f32), transform.flip_y cast(f32) ] vec2;
@@ -404,16 +567,30 @@ func draw_texture_box(render render_2d_api ref, transform render_2d_transform, s
     sprite.texture_box_max = texture_box.max;
 }
 
-func draw_circle(render render_2d_api ref, center vec2, radius f32, depth f32, color = [ 1, 1, 1, 1 ] vec4)
+func draw_circle(render render_2d_api ref, shader_index = u32_invalid_index, center vec2, radius f32, depth f32, color = [ 1, 1, 1, 1 ] vec4)
 {
-    if render.circles.require_used_count >= render.circles.count
-    {
-        render.circles.require_used_count += 1;
-        return;
-    }
+    render.circles.required_count += 1;
 
-    var circle = render.circles[render.circles.require_used_count] ref;
-    render.circles.require_used_count += 1;
+    var texture_index u32 = 0;
+
+    if shader_index is u32_invalid_index
+        shader_index = render.shader_circle_info.shader_index;
+
+    if shader_index >= render.shaders.count
+        return;
+
+    if texture_index >= render.textures.count
+        return;
+
+    if render.circles.required_count > render.circles.count
+        return;
+
+    assert(shader_index < render.shaders.required_count);
+    assert(texture_index < render.textures.required_count);
+
+    var circle = render.circles[render.circles.required_count - 1] ref;
+    render.circles.shader_index[render.circles.required_count - 1] = shader_index;
+    render.circles.texture_index[render.circles.required_count - 1] = texture_index;
 
     circle.color  = color;
     circle.center = center;
@@ -423,13 +600,13 @@ func draw_circle(render render_2d_api ref, center vec2, radius f32, depth f32, c
 
 def render_2d_font_line_advance_pixel_height = 32 cast(s32);
 
-func font_frame(platform platform_api ref, render render_2d_api ref, font render_2d_font ref, font_paths string[], tmemory memory_arena ref)
+func frame_font(platform platform_api ref, render render_2d_api ref, font render_2d_font ref, font_paths string[], tmemory memory_arena ref)
 {
     var tmemory_frame = temporary_begin(tmemory);
 
     if not font.atlas.base.handle
         font.atlas.base = gl_create_texture_2d(2048, 2048, {} u8[], GL_RED, true, [ GL_ONE, GL_ONE, GL_ONE, GL_RED ] u32[]);
-    
+
     var stbtt_info stbtt_fontinfo[render_2d_font_count];
     assert(font_paths.count <= stbtt_info.count);
 
@@ -438,8 +615,8 @@ func font_frame(platform platform_api ref, render render_2d_api ref, font render
         var result = try_platform_read_entire_file(platform, tmemory, font_paths[i]);
         if not result.ok
             continue;
-        
-        stbtt_InitFont(stbtt_info[i] ref, result.data.base, 0);       
+
+        stbtt_InitFont(stbtt_info[i] ref, result.data.base, 0);
 
         // we store the line advance relative to render_2d_font_line_advance_pixel_height
         // and then we can compute the actual advance when looking at specific pixel_height
@@ -483,7 +660,7 @@ func font_frame(platform platform_api ref, render render_2d_api ref, font render
                 font.atlas_row_height = 0;
                 assert(font.atlas_x + width <= render.sprite_atlas.width);
             }
-            
+
             assert(font.atlas_y + height <= render.sprite_atlas.height);
 
             {
@@ -510,8 +687,8 @@ func font_frame(platform platform_api ref, render render_2d_api ref, font render
 
                 reallocate_array(tmemory, glyph_pixels ref, 0);
             }
-            
-            var glyph = font.glyph[i] ref;            
+
+            var glyph = font.glyph[i] ref;
             glyph.x = font.atlas_x;
             glyph.y = font.atlas_y;
             glyph.width  = width;
@@ -534,6 +711,8 @@ func font_frame(platform platform_api ref, render render_2d_api ref, font render
     glBindTexture(GL_TEXTURE_2D, 0);
 
     temporary_end(tmemory, tmemory_frame);
+
+    font.atlas_texture_index = get_texture_index(render, font.atlas);
 }
 
 func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] vec2, zoom = 1.0, font render_2d_font ref, color = [ 1, 1, 1, 1 ] vec4, text string)
@@ -544,7 +723,7 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
     var settings = font.settings;
     var iterator = text;
     while iterator.count
-    {        
+    {
         var result = utf8_advance(iterator ref);
 
         if font.cursor.pending_newline
@@ -554,7 +733,7 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
 
             font.cursor.baseline_x = font.cursor.line_start_x;
             font.cursor.baseline_y -= line_advance;
-            font.cursor.pending_newline = false;            
+            font.cursor.pending_newline = false;
         }
 
         if result.code is "\n"[0]
@@ -581,8 +760,8 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
 
         if found_index is u32_invalid_index
         {
-            assert(font.used_count < font.glyph_key.count);            
-            
+            assert(font.used_count < font.glyph_key.count);
+
             var key = font.glyph_key[font.used_count] ref;
             key deref = {} render_2d_glyph_key;
             font.used_count += 1;
@@ -599,7 +778,7 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
 
             // from viewport to world coordinates
             transform.pivot.x = font.cursor.baseline_x + glyph.x_draw_offset;
-            transform.pivot.y = font.cursor.baseline_y + glyph.y_draw_offset;            
+            transform.pivot.y = font.cursor.baseline_y + glyph.y_draw_offset;
             transform.pivot = get_world_point(render, transform.pivot);
 
             transform.depth = font.cursor.depth;
@@ -617,7 +796,7 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
             transform.pivot += scale(size, alignment);
             size *= zoom;
 
-            draw_texture_box(render, transform, size, color, font.atlas, texture_box);
+            draw_texture_box(render, transform, size, color, font.atlas_texture_index, texture_box);
 
             font.cursor.baseline_x += glyph.x_advance;
         }
@@ -631,59 +810,163 @@ func execute(render render_2d_api ref, gl gl_api ref, tmemory memory_arena ref)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    var textures = { minimum(render.textures.require_used_count, render.textures.count), render.textures.base.base } render_2d_texture[];
-    var sprites = { minimum(render.sprites.require_used_count, render.sprites.count), render.sprites.base.base } render_2d_gl_sprite[];
-    var circles = { minimum(render.circles.require_used_count, render.circles.count), render.circles.base.base } render_2d_gl_circle[];
+    var shaders = { minimum(render.shaders.required_count, render.shaders.count), render.shaders.base.base } render_2d_shader[];
+    var textures = { minimum(render.textures.required_count, render.textures.count), render.textures.base.base } render_2d_texture[];
 
-    if not sprites.count and not circles.count
+    // var sprites = { minimum(render.sprites.required_count, render.sprites.count), render.sprites.base.base } render_2d_gl_sprite[];
+    var circles = { minimum(render.circles.required_count, render.circles.count), render.circles.base.base } render_2d_gl_circle[];
+
+    var sprite_count = minimum(render.sprites.required_count, render.sprites.count);
+    var circle_count = minimum(render.circles.required_count, render.circles.count);
+
+    if not sprite_count and not circle_count
         return;
 
-    resize_buffer(gl, render.context_buffer ref, render_2d_gl_buffer.context_buffer, render.context ref, tmemory);
-
-    resize_buffer(gl, render.sprite_buffer ref, render_2d_gl_buffer.sprite_buffer, sprites, tmemory);
-
-    resize_buffer(gl, render.circle_buffer ref, render_2d_gl_buffer.circle_buffer, circles, tmemory);
-
-    bind_uniform_buffer(render.context_buffer);
-    bind_uniform_buffer(render.sprite_buffer);
-    bind_uniform_buffer(render.circle_buffer);
-
-    glBindVertexArray(render.gl_empty_vertex_array);    
-
-    if sprites.count
     {
-        glUseProgram(render.shader_sprite.handle);
+        var context_array render_2d_context[];
 
-        // HACK: we only use one texture
-        glUniform1i(render.shader_sprite.sprite_texture, 0);
-        glActiveTexture(GL_TEXTURE0);
+        // first pass
+        reallocate_array(tmemory, context_array ref, 1);
+        context_array[0] = render.context;
+        context_array[0].min_alpha = 1;
 
-        loop var texture_index u32; textures.count
+        // second pass
+        reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.context_buffer, context_array ref);
+        reallocate_array(tmemory, context_array ref, context_array.count + 1);
+        context_array[context_array.count - 1] = render.context;
+        context_array[context_array.count - 1].min_alpha = 0;
+
+        resize_buffer(gl, render.context_buffer ref, render_2d_gl_buffer.context_buffer, context_array);
+        reallocate_array(tmemory, context_array ref, 0);
+    }
+
+    {
+        var sprites render_2d_gl_sprite[];
+
+        loop var shader_index u32; shaders.count
         {
-            glBindTexture(GL_TEXTURE_2D, textures[texture_index].handle);
-            
-            loop var sprite_index u32; sprites.count
+            loop var texture_index u32; textures.count
             {
-                if render.sprites.texture_index[sprite_index] is_not texture_index
-                    continue;
+                reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.sprite_buffer, sprites ref);
 
-                bind_uniform_buffer(render.sprite_buffer, sprite_index, 1);
+                loop var sprite_index u32; sprite_count
+                {
+                    if (render.sprites.shader_index[sprite_index] is_not shader_index) or (render.sprites.texture_index[sprite_index] is_not texture_index)
+                        continue;
 
-                glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 1); // sprites.count cast(u32));
+                    reallocate_array(tmemory, sprites ref, sprites.count + 1);
+                    sprites[sprites.count - 1] = render.sprites[sprite_index];
+                }
             }
         }
 
-        glBindTexture(GL_TEXTURE_2D, 0);
+        resize_buffer(gl, render.sprite_buffer ref, render_2d_gl_buffer.sprite_buffer, sprites);
+        reallocate_array(tmemory, sprites ref, 0);
     }
 
-    if circles.count
     {
-        glUseProgram(render.shader_circle.handle);
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, circles.count cast(u32));
+        var circles render_2d_gl_circle[];
+
+        loop var shader_index u32; shaders.count
+        {
+            loop var texture_index u32; textures.count
+            {
+                reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.circle_buffer, circles ref);
+
+                loop var circle_index u32; circle_count
+                {
+                    if (render.circles.shader_index[circle_index] is_not shader_index) or (render.circles.texture_index[circle_index] is_not texture_index)
+                        continue;
+
+                    reallocate_array(tmemory, circles ref, circles.count + 1);
+                    circles[circles.count - 1] = render.circles[circle_index];
+                }
+            }
+        }
+
+        resize_buffer(gl, render.circle_buffer ref, render_2d_gl_buffer.circle_buffer, circles);
+        reallocate_array(tmemory, circles ref, 0);
     }
 
+    glBindVertexArray(render.gl_empty_vertex_array);
+
+    var context_offset u32;
+    loop var pass u32; 2
+    {
+        uniform_buffer_align_offset(render.context_buffer, context_offset ref);
+        bind_uniform_buffer(gl, render.context_buffer, context_offset);
+        context_offset += 1;
+
+        glDepthMask((pass is 0) cast(GLboolean));
+
+        var sprite_offset u32;
+        loop var shader_index u32; shaders.count
+        {
+            glUseProgram(render.shaders[shader_index].handle);
+            glUniform1i(render.shaders[shader_index].main_texture, 0);
+
+            glActiveTexture(GL_TEXTURE0);
+
+            loop var texture_index u32; textures.count
+            {
+                var instance_count u32;
+                loop var sprite_index u32; sprite_count
+                {
+                    if (render.sprites.shader_index[sprite_index] is_not shader_index) or (render.sprites.texture_index[sprite_index] is_not texture_index)
+                        continue;
+
+                    instance_count += 1;
+                }
+
+                if instance_count
+                {
+                    glBindTexture(GL_TEXTURE_2D, textures[texture_index].handle);
+
+                    uniform_buffer_align_offset(render.sprite_buffer, sprite_offset ref);
+                    bind_uniform_buffer(gl, render.sprite_buffer, sprite_offset);
+                    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instance_count);
+                }
+
+                sprite_offset += instance_count;
+            }
+        }
+
+        var circle_offset u32;
+        loop var shader_index u32; shaders.count
+        {
+            glUseProgram(render.shaders[shader_index].handle);
+            glUniform1i(render.shaders[shader_index].main_texture, 0);
+
+            glActiveTexture(GL_TEXTURE0);
+
+            loop var texture_index u32; textures.count
+            {
+                var instance_count u32;
+                loop var circle_index u32; circle_count
+                {
+                    if (render.circles.shader_index[circle_index] is_not shader_index) or (render.circles.texture_index[circle_index] is_not texture_index)
+                        continue;
+
+                    instance_count += 1;
+                }
+
+                if instance_count
+                {
+                    glBindTexture(GL_TEXTURE_2D, textures[texture_index].handle);
+
+                    uniform_buffer_align_offset(render.circle_buffer, circle_offset ref);
+                    bind_uniform_buffer(gl, render.circle_buffer, circle_offset);
+                    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instance_count);
+                }
+
+                circle_offset += instance_count;
+            }
+        }
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glDepthMask(GL_TRUE);
     glUseProgram(0);
     glBindVertexArray(0);
 }
-
-

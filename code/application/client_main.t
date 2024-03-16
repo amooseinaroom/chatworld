@@ -881,7 +881,7 @@ func game_update program_update_type
 
             // start render 2d frame after camera positoin update
             {
-                var context = { ui.viewport_size, tile_offset, tile_size, 0 } render_2d_context;
+                var context = { ui.viewport_size, tile_offset, tile_size, 1.0 } render_2d_context;
 
                 var sprite_paths string[];
                 reallocate_array(tmemory, sprite_paths ref, asset_sprite_paths.count + state.custom_sprite_paths.count);
@@ -891,16 +891,16 @@ func game_update program_update_type
                 copy_array({ asset_sprite_paths.count, sprite_paths.base } string[], paths);
                 copy_array({ state.custom_sprite_paths.count, sprite_paths.base + asset_sprite_paths.count } string[], state.custom_sprite_paths);
 
-                frame(platform, render, context, sprite_paths, tmemory);
+                frame(platform, state.gl ref, render, context, sprite_paths, tmemory);
 
                 var font_paths =
                 [
-                    "C:/work/games/chatworld/assets/fonts/stanberry/Stanberry.ttf", 
+                    "C:/work/games/chatworld/assets/fonts/stanberry/Stanberry.ttf",
                     "C:/work/games/chatworld/assets/fonts/dinomouse/Dinomouse-Regular.otf",
                     "C:/work/games/chatworld/assets/fonts/Kosugi_Maru/KosugiMaru-Regular.ttf",
                 ] string[];
 
-                font_frame(platform, render, state.dynamic_font ref, font_paths, tmemory);
+                frame_font(platform, render, state.dynamic_font ref, font_paths, tmemory);
             }
 
             var dfont = state.dynamic_font ref;
@@ -923,7 +923,7 @@ func game_update program_update_type
 
             dfont.settings.font_index = 2;
             dfont.settings.pixel_height = 47;
-            {                
+            {
                 var text = "πポゴの時間だ\n";
                 var letter_count u32;
                 while text.count
@@ -942,7 +942,7 @@ func game_update program_update_type
 
                     var rotation = text_rotation * 2 * pi32;
 
-                    var offset = (sin(2 * pi32 * phase) * 32) cast(s32); 
+                    var offset = (sin(2 * pi32 * phase) * 32) cast(s32);
                     //dfont.cursor.baseline_x += offset;
                     dfont.cursor.baseline_y += offset;
 
@@ -958,7 +958,7 @@ func game_update program_update_type
                 transform.pivot = game.camera_position;
                 transform.alignment = v2(0.5);
                 transform.depth = 0.01;
-                draw_texture_box(render, transform, v2(10), dfont.atlas, [ v2(0), v2(1) ] box2);
+                draw_texture_box(render, transform, v2(10), dfont.atlas_texture_index, [ v2(0), v2(1) ] box2);
             }
 
             var camera_box box2;
