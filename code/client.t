@@ -238,11 +238,14 @@ struct game_player
     sprite_index_plus_one u32;
 }
 
-enum client_state
+enum client_state s8
 {
+    error_client_is_ipv4_only = -1;
+
     disconnected;
     connecting;
     online;
+
 }
 
 // TODO: unify this with server pending messages somehow
@@ -343,7 +346,7 @@ func init(client game_client ref, network platform_network ref, server_address p
 
 func tick(client game_client ref, network platform_network ref, delta_seconds f32)
 {
-    if client.state is client_state.disconnected
+    if client.state < client_state.connecting
         return;
 
     assert(platform_network_is_valid(client.socket));
@@ -746,11 +749,28 @@ func find_network_entity(game game_state ref, network_id game_entity_network_id)
 func send(network platform_network ref, client game_client ref, message network_message_union)
 {
     assert(client.state is_not client_state.disconnected);
-    send(network, client.socket, client.server_address, client.send_buffer ref, message);
+    var result = send(network, client.socket, client.server_address, client.send_buffer ref, message);
+    check_send_error(network, client, result);
 }
 
 func send_flush(network platform_network ref, client game_client ref)
 {
     assert(client.state is_not client_state.disconnected);
-    send_flush(network, client.socket, client.server_address, client.send_buffer ref);
+    var result = send_flush(network, client.socket, client.server_address, client.send_buffer ref);
+    check_send_error(network, client, result);
+}
+
+func check_send_error(network platform_network ref, client game_client ref, result platform_network_result) (ok b8)
+{
+    if result is platform_network_result.error_local_ipv4_can_not_reach_remote_ipv6
+    {
+        client.state = client_state.error_client_is_ipv4_only;
+        platform_network_peer_close(network, client.socket ref);
+        return false;
+    }
+    else
+    {
+        require(result is platform_network_result.ok);
+        return true;
+    }
 }

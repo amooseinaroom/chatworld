@@ -744,7 +744,13 @@ func game_update program_update_type
 
         tick(client, state.network ref, platform.delta_seconds);
 
-        if client.state is client_state.connecting
+        switch client.state
+        case client_state.error_client_is_ipv4_only
+        {
+            var text_color = [ 255, 10, 10, 255 ] rgba8;
+            print(ui, 10, text_color, font, cursor ref, "ERROR: To reach the server, you need an ip v6 address, but your connection only supports ip v4.\nCheck your internet ip for your ip v6 address.\nIf you don't have an ip v6, the server currently does not support your connection.\nOtherwise this is a bug, so please reach out to the developer.\n");
+        }
+        case client_state.connecting
         {
             var global animation_time f32;
             animation_time = fmod(animation_time + platform.delta_seconds, 1.0);
@@ -753,9 +759,7 @@ func game_update program_update_type
             if (client.server_address.tag is platform_network_address_tag.ip_v4)
                 print(ui, 10, text_color, font, cursor ref, "Connecting to Server %.%.%.%:%", client.server_address.ip_v4[0], client.server_address.ip_v4[1], client.server_address.ip_v4[2], client.server_address.ip_v4[3], client.server_address.port);
         }
-
-        if (client.state is client_state.online)
-        label client_online
+        case client_state.online
         {
             if client.capture_the_flag.is_running
             {

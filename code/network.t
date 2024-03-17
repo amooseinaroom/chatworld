@@ -246,7 +246,7 @@ func receive(network platform_network ref, receive_socket platform_network_socke
     // COMPILER BUG: deref fixed size array and auto cast to dynamic size array
     // casting u8[512] ref to u8[] or rather accesing .base does not use '->'
     var result = platform_network_receive(network, receive_socket, buffer, buffer_used_byte_count ref, platform_network_timeout_milliseconds_zero);
-    network_assert(result.ok);
+    network_assert(result.result is platform_network_result.ok);
 
     if not buffer_used_byte_count
         return result.has_data, false, {} platform_network_address, {} u8[];
@@ -289,7 +289,7 @@ struct network_send_buffer
     repeat_count_by_byte u8[256];
 }
 
-func send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref, data u8[])
+func send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref, data u8[]) (result platform_network_result)
 {
     network_assert(data.count);
 
@@ -311,39 +311,46 @@ func send(network platform_network ref, send_socket platform_network_socket, add
 
     if not compress_next(buffer.compress_state ref, buffer.base, data)
     {
-        var byte_count = compress_end(buffer.compress_state ref, buffer.base);
-        network_assert(byte_count);
-        var ok = platform_network_send(network, send_socket, address, { byte_count, buffer.base.base } u8[], platform_network_timeout_milliseconds_zero);
-        network_assert(ok);
+        var result = compress_end_and_send(network, send_socket, address, buffer);
+        if result is_not platform_network_result.ok
+            return result;
 
-        buffer.compressed_packet_count += 1;
-        buffer.compressed_byte_count   += byte_count;
-
-        ok = compress_next(buffer.compress_state ref, buffer.base, data);
+        var ok = compress_next(buffer.compress_state ref, buffer.base, data);
         network_assert(ok);
     }
 
     buffer.packet_count += 1;
     buffer.byte_count   += data.count cast(u32);
+
+    return platform_network_result.ok;
 }
 
-func send_flush(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref)
+func send_flush(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref) (result platform_network_result)
 {
+    var result = platform_network_result.ok;
     if buffer.compress_state.used_byte_count or buffer.compress_state.repeat_count
-    {
-        var byte_count = compress_end(buffer.compress_state ref, buffer.base);
-        network_assert(byte_count);
-        var ok = platform_network_send(network, send_socket, address, { byte_count, buffer.base.base } u8[], platform_network_timeout_milliseconds_zero);
-        network_assert(ok);
+        result = compress_end_and_send(network, send_socket, address, buffer);
 
-        buffer.compressed_packet_count += 1;
-        buffer.compressed_byte_count   += byte_count;
-    }
+    return result;
 }
 
-func send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref, message network_message_union)
+func compress_end_and_send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref) (result platform_network_result)
 {
-    send(network, send_socket, address, buffer, value_to_u8_array(message));
+    assert(buffer.compress_state.used_byte_count or buffer.compress_state.repeat_count);
+
+    var byte_count = compress_end(buffer.compress_state ref, buffer.base);
+    network_assert(byte_count);
+    var result = platform_network_send(network, send_socket, address, { byte_count, buffer.base.base } u8[], platform_network_timeout_milliseconds_zero);
+
+    buffer.compressed_packet_count += 1;
+    buffer.compressed_byte_count   += byte_count;
+
+    return result;
+}
+
+func send(network platform_network ref, send_socket platform_network_socket, address platform_network_address, buffer network_send_buffer ref, message network_message_union) (result platform_network_result)
+{
+    return send(network, send_socket, address, buffer, value_to_u8_array(message));
 }
 
 type game_user_sprite rgba8[256 * 128];

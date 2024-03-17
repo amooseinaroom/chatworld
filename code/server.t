@@ -1298,17 +1298,23 @@ func add_user(server game_server ref, name string63, password string63) (user ga
 
 func send(network platform_network ref, server game_server ref, client game_client_connection ref, message network_message_union)
 {
-    send(network, server.socket, client.address, client.send_buffer ref, message);
+    var result = send(network, server.socket, client.address, client.send_buffer ref, message);
+    require(result is platform_network_result.ok);
 }
 
 func send_flush(network platform_network ref, server game_server ref, client game_client_connection ref)
 {
-    send_flush(network, server.socket, client.address, client.send_buffer ref);
+    var result = send_flush(network, server.socket, client.address, client.send_buffer ref);
+    require(result is platform_network_result.ok);
 }
 
 func send_unqueued(network platform_network ref, server game_server ref, address platform_network_address, message network_message_union)
 {
     var send_buffer network_send_buffer;
-    send(network, server.socket, address, send_buffer ref, message);
-    send_flush(network, server.socket, address, send_buffer ref);
+
+    var result = send(network, server.socket, address, send_buffer ref, message);
+    require(result is platform_network_result.ok);
+
+    result = send_flush(network, server.socket, address, send_buffer ref);
+    require(result is platform_network_result.ok);
 }
