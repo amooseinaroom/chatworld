@@ -199,6 +199,8 @@ enum game_entity_tag u8
     flag_target;
     dog_retriever;
     healing_altar;
+
+    tall_grass;
 }
 
 enum game_entity_hitbox_tag u8
@@ -383,7 +385,7 @@ func add_flag_target(game game_state ref, network_id game_entity_network_id, pos
 func add_dog_retriever(game game_state ref, network_id game_entity_network_id, position vec2, team_index u32, team_color rgba8, player_target_position vec2, flag_target_position vec2) (id game_entity_id)
 {
     assert(team_index < 2);
-    var id = add(game, game_entity_tag.dog_retriever, network_id);    
+    var id = add(game, game_entity_tag.dog_retriever, network_id);
 
     var entity = get(game, id);
     entity.collider = { {} vec2, 0.33 } sphere2;
@@ -1119,7 +1121,7 @@ type game_tile_mask union
 func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite_id)
 {
     //if (x < 0) or (x >= game_world_width) or (y < 0) or (y >= game_world_width)
-        //return asset_sprite_id.kenny_rpg_tile_rpgtile029; // water asset_sprite_id.none;
+        //return asset_sprite_id.tile_rpgtile029; // water asset_sprite_id.none;
 
     var mask game_tile_mask;
     loop var i; 9
@@ -1141,7 +1143,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile000,
+            asset_sprite_id.tile_rpgtile000,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1151,7 +1153,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile001,
+            asset_sprite_id.tile_rpgtile001,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1161,7 +1163,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile002,
+            asset_sprite_id.tile_rpgtile002,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1171,7 +1173,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile018,
+            asset_sprite_id.tile_rpgtile018,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1181,7 +1183,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile036,
+            asset_sprite_id.tile_rpgtile036,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1191,7 +1193,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile037,
+            asset_sprite_id.tile_rpgtile037,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1201,7 +1203,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile038,
+            asset_sprite_id.tile_rpgtile038,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1211,7 +1213,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile020,
+            asset_sprite_id.tile_rpgtile020,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1221,7 +1223,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile003,
+            asset_sprite_id.tile_rpgtile003,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1231,7 +1233,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile004,
+            asset_sprite_id.tile_rpgtile004,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1241,7 +1243,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile021,
+            asset_sprite_id.tile_rpgtile021,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1251,7 +1253,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile022,
+            asset_sprite_id.tile_rpgtile022,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1262,7 +1264,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.water, game_world_tile.water,
                 game_world_tile.grass, game_world_tile.water, game_world_tile.water,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile010,
+            asset_sprite_id.tile_rpgtile010,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1272,7 +1274,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile011,
+            asset_sprite_id.tile_rpgtile011,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1282,7 +1284,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.grass,
                 game_world_tile.water, game_world_tile.water, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile012,
+            asset_sprite_id.tile_rpgtile012,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1292,7 +1294,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.water, game_world_tile.water,
                 game_world_tile.grass, game_world_tile.water, game_world_tile.water,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile028,
+            asset_sprite_id.tile_rpgtile028,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1302,7 +1304,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.water, game_world_tile.water,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile044,
+            asset_sprite_id.tile_rpgtile044,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1312,7 +1314,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile045,
+            asset_sprite_id.tile_rpgtile045,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1322,7 +1324,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.grass,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile046,
+            asset_sprite_id.tile_rpgtile046,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1332,7 +1334,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.grass,
                 game_world_tile.water, game_world_tile.water, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile030,
+            asset_sprite_id.tile_rpgtile030,
             check_mask_cross
         } game_tile_to_sprite,
 
@@ -1342,7 +1344,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
                 game_world_tile.water, game_world_tile.water, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile013,
+            asset_sprite_id.tile_rpgtile013,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1352,7 +1354,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
                 game_world_tile.grass, game_world_tile.water, game_world_tile.water,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile014,
+            asset_sprite_id.tile_rpgtile014,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1362,7 +1364,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile031,
+            asset_sprite_id.tile_rpgtile031,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1372,7 +1374,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
                 game_world_tile.water, game_world_tile.water, game_world_tile.water,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile032,
+            asset_sprite_id.tile_rpgtile032,
             check_mask_all
         } game_tile_to_sprite,
 
@@ -1389,7 +1391,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
                 game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile005
+            asset_sprite_id.tile_rpgtile005
         } game_tile_to_sprite,
 
         {
@@ -1398,7 +1400,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile006
+            asset_sprite_id.tile_rpgtile006
         } game_tile_to_sprite,
 
         {
@@ -1407,7 +1409,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile007
+            asset_sprite_id.tile_rpgtile007
         } game_tile_to_sprite,
 
         {
@@ -1416,7 +1418,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
                 game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile023
+            asset_sprite_id.tile_rpgtile023
         } game_tile_to_sprite,
 
         {
@@ -1425,7 +1427,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.grass, game_world_tile.ground, game_world_tile.ground,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile041
+            asset_sprite_id.tile_rpgtile041
         } game_tile_to_sprite,
 
         {
@@ -1434,7 +1436,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.ground,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile042
+            asset_sprite_id.tile_rpgtile042
         } game_tile_to_sprite,
 
         {
@@ -1443,7 +1445,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
                 game_world_tile.grass, game_world_tile.grass, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile043
+            asset_sprite_id.tile_rpgtile043
         } game_tile_to_sprite,
 
         {
@@ -1452,7 +1454,7 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
                 game_world_tile.ground, game_world_tile.ground, game_world_tile.grass,
             ] game_tile_mask,
-            asset_sprite_id.kenny_rpg_tile_rpgtile025
+            asset_sprite_id.tile_rpgtile025
         } game_tile_to_sprite,
     ] game_tile_to_sprite[];
     }
@@ -1480,9 +1482,9 @@ func get_sprite(tile_map game_world_tile_map ref, x s32, y s32) (id asset_sprite
     var simple_tile_to_sprite_map =
     [
         asset_sprite_id.none,
-        asset_sprite_id.kenny_rpg_tile_rpgtile024,
-        asset_sprite_id.kenny_rpg_tile_rpgtile019,
-        asset_sprite_id.kenny_rpg_tile_rpgtile029,
+        asset_sprite_id.tile_rpgtile024,
+        asset_sprite_id.tile_rpgtile019,
+        asset_sprite_id.tile_rpgtile029,
     ] asset_sprite_id[];
 
     return simple_tile_to_sprite_map[mask[4]];

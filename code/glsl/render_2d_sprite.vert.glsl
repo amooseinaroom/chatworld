@@ -5,7 +5,7 @@ layout (std140, column_major) uniform context_buffer
     vec2  viewport_size;
     vec2  draw_offset;
     float draw_scale;
-    float min_alpha;
+    float _unsued;
 };
 
 struct render_2d_gl_sprite
@@ -15,11 +15,13 @@ struct render_2d_gl_sprite
     vec2  pivot;
     vec2  size;
     vec2  alignment;
-    float depth;
-    float rotation;
 
     vec2 texture_box_min;
     vec2 texture_box_max;
+
+    float rotation;
+
+    float _unused;
 };
 
 layout (std140, column_major) uniform sprite_buffer
@@ -75,5 +77,5 @@ void main()
     fragment.color = sprite.color;
     fragment.uv = mix(sprite.texture_box_min, sprite.texture_box_max, blend);
 
-    gl_Position = vec4(clip_position, sprite.depth, 1);
+    gl_Position = vec4(clip_position, 0, 1);
 }

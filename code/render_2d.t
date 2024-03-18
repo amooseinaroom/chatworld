@@ -33,6 +33,9 @@ struct render_2d_api
     sprite_cache render_2d_sprite_info[32 * 32];
     sprite_atlas render_2d_texture;
     sprite_atlas_texture_index u32;
+
+    min_layer s32;
+    max_layer s32;
 }
 
 def render_2d_sprite_size = 64 cast(s32);
@@ -49,7 +52,7 @@ struct render_2d_context
     viewport_size vec2;
     draw_offset   vec2;
     draw_scale    f32;
-    min_alpha     f32;
+    _unsued       f32[3];
 }
 
 struct render_2d_shader_info
@@ -137,7 +140,7 @@ struct render_2d_font_cursor
     baseline_x      s32;
     baseline_y      s32;
     line_start_x    s32;
-    depth           f32;
+    layer     s16;
     pending_newline b8;
 }
 
@@ -145,8 +148,8 @@ struct render_2d_transform
 {
     pivot     vec2;
     alignment vec2;
-    depth     f32;
     rotation  f32;
+    layer     s16;
     flip_x    b8;
     flip_y    b8;
 }
@@ -154,20 +157,34 @@ struct render_2d_transform
 struct render_2d_gl_sprite
 {
     color           vec4;
+
     pivot           vec2;
     size            vec2;
     alignment       vec2;
-    depth           f32;
-    rotation        f32;
+
     texture_box_min vec2;
     texture_box_max vec2;
+
+    rotation        f32;
+    _unused         f32;
 }
+
+type render_2d_key union
+{
+    expand base struct
+    {
+        texture_index u8;
+        shader_index  u8;
+        layer         s16;
+    };
+
+    value s32;
+};
 
 struct render_2d_gl_sprite_buffer
 {
-    expand base               render_2d_gl_sprite[];
-           shader_index       u32[];
-           texture_index      u32[];
+    expand base           render_2d_gl_sprite[];
+           key         render_2d_key[];
            required_count usize;
 }
 
@@ -181,9 +198,8 @@ struct render_2d_gl_circle
 
 struct render_2d_gl_circle_buffer
 {
-    expand base               render_2d_gl_circle[];
-           shader_index       u32[];
-           texture_index      u32[];
+    expand base           render_2d_gl_circle[];
+           key         render_2d_key[];
            required_count usize;
 }
 
@@ -242,29 +258,25 @@ func frame(platform platform_api ref, gl gl_api ref, render render_2d_api ref, c
     render.context = context;
 
     {
-        render.sprites.base = {} render_2d_gl_sprite[];
-        render.sprites.shader_index = {} u32[];
-        render.sprites.texture_index = {} u32[];
+        render.sprites.base   = {} render_2d_gl_sprite[];
+        render.sprites.key = {} render_2d_key[];
 
         var count = maximum(render.sprites.count, render.sprites.required_count * 2);
 
         reallocate_array(tmemory, render.sprites.base ref, count);
-        reallocate_array(tmemory, render.sprites.shader_index ref, count);
-        reallocate_array(tmemory, render.sprites.texture_index ref, count);
+        reallocate_array(tmemory, render.sprites.key ref, count);
 
         render.sprites.required_count = 0;
     }
 
     {
         render.circles.base = {} render_2d_gl_circle[];
-        render.circles.shader_index = {} u32[];
-        render.circles.texture_index = {} u32[];
+        render.circles.key = {} render_2d_key[];
 
         var count = maximum(render.circles.count, render.circles.required_count * 2);
 
         reallocate_array(tmemory, render.circles.base ref, count);
-        reallocate_array(tmemory, render.circles.shader_index ref, count);
-        reallocate_array(tmemory, render.circles.texture_index ref, count);
+        reallocate_array(tmemory, render.circles.key ref, count);
         render.circles.required_count = 0;
     }
 
@@ -341,6 +353,9 @@ func frame(platform platform_api ref, gl gl_api ref, render render_2d_api ref, c
 
     render.sprite_atlas_texture_index = get_texture_index(render, render.sprite_atlas);
 
+    render.min_layer = 0;
+    render.max_layer = 0;
+
     temporary_end(tmemory, tmemory_frame);
 }
 
@@ -399,6 +414,7 @@ func get_shader_index(render render_2d_api ref, shader render_2d_shader) (shader
     if found_shader_index is u32_invalid_index
     {
         render.shaders.required_count += 1;
+        assert(render.shaders.required_count <= 256);
 
         if render.shaders.required_count < render.shaders.count
         {
@@ -426,6 +442,7 @@ func get_texture_index(render render_2d_api ref, texture render_2d_texture) (tex
     if found_texture_index is u32_invalid_index
     {
         render.textures.required_count += 1;
+        assert(render.shaders.required_count <= 256);
 
         if render.textures.required_count < render.textures.count
         {
@@ -438,15 +455,13 @@ func get_texture_index(render render_2d_api ref, texture render_2d_texture) (tex
     return found_texture_index;
 }
 
-func get_y_sorted_transform(render render_2d_api ref, position vec2, alignemnt = [ 0.5, 0 ] vec2) (result render_2d_transform)
+func get_y_layer(render render_2d_api ref, world_y f32) (layer s16)
 {
-    var viewport_y = (position.y * render.context.draw_scale + render.context.draw_offset.y);
-    var depth = (viewport_y / render.context.viewport_size.y) * 0.5 + 0.25;
-    var result = { position, alignemnt, depth, 0, false, false } render_2d_transform;
-    return result;
+    var viewport_point = get_viewport_point(render, v2(0, world_y));
+    var layer = viewport_point.y cast(s16) * -2 - 1; // so we have 1 layer of overlay per sprite
+    return layer;
 }
 
-// TODO: ignores rotation for now
 func get_viewport_point(render render_2d_api ref, point vec2) (viewport_point vec2)
 {
     var viewport_point = point * render.context.draw_scale + render.context.draw_offset;
@@ -459,6 +474,7 @@ func get_world_point(render render_2d_api ref, viewport_point vec2) (point vec2)
     return point;
 }
 
+// TODO: ignores rotation for now
 func get_viewport_box(render render_2d_api ref, transform render_2d_transform, size vec2) (box box2)
 {
     var a = transform.pivot + scale(size, -transform.alignment);
@@ -545,8 +561,9 @@ func draw_texture_box(render render_2d_api ref, shader_index = u32_invalid_index
     assert(texture_index < render.textures.required_count);
 
     var sprite = render.sprites[render.sprites.required_count - 1] ref;
-    render.sprites.shader_index[render.sprites.required_count - 1]  = shader_index;
-    render.sprites.texture_index[render.sprites.required_count - 1] = texture_index;
+    render.sprites.key[render.sprites.required_count - 1].shader_index  = shader_index cast(u8);
+    render.sprites.key[render.sprites.required_count - 1].texture_index = texture_index cast(u8);
+    render.sprites.key[render.sprites.required_count - 1].layer         = transform.layer;
 
     {
         var blend_flip = [ transform.flip_x cast(f32), transform.flip_y cast(f32) ] vec2;
@@ -556,18 +573,20 @@ func draw_texture_box(render render_2d_api ref, shader_index = u32_invalid_index
         texture_box.max = max;
     }
 
+    render.min_layer = minimum(render.min_layer, transform.layer);
+    render.max_layer = maximum(render.max_layer, transform.layer);
+
     // sprite.texture_index = found_texture_index;
     sprite.color     = color;
     sprite.pivot     = transform.pivot;
     sprite.size      = size;
     sprite.alignment = transform.alignment;
-    sprite.depth     = transform.depth;
     sprite.rotation  = transform.rotation;
     sprite.texture_box_min = texture_box.min;
     sprite.texture_box_max = texture_box.max;
 }
 
-func draw_circle(render render_2d_api ref, shader_index = u32_invalid_index, center vec2, radius f32, depth f32, color = [ 1, 1, 1, 1 ] vec4)
+func draw_circle(render render_2d_api ref, shader_index = u32_invalid_index, center vec2, radius f32, depth f32, layer s16 = 0, color = [ 1, 1, 1, 1 ] vec4)
 {
     render.circles.required_count += 1;
 
@@ -589,8 +608,9 @@ func draw_circle(render render_2d_api ref, shader_index = u32_invalid_index, cen
     assert(texture_index < render.textures.required_count);
 
     var circle = render.circles[render.circles.required_count - 1] ref;
-    render.circles.shader_index[render.circles.required_count - 1] = shader_index;
-    render.circles.texture_index[render.circles.required_count - 1] = texture_index;
+    render.circles.key[render.circles.required_count - 1].shader_index = shader_index cast(u8);
+    render.circles.key[render.circles.required_count - 1].texture_index = texture_index cast(u8);
+    render.circles.key[render.circles.required_count - 1].layer         = layer;
 
     circle.color  = color;
     circle.center = center;
@@ -780,8 +800,7 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
             transform.pivot.x = font.cursor.baseline_x + glyph.x_draw_offset;
             transform.pivot.y = font.cursor.baseline_y + glyph.y_draw_offset;
             transform.pivot = get_world_point(render, transform.pivot);
-
-            transform.depth = font.cursor.depth;
+            transform.layer = font.cursor.layer;
             transform.rotation = rotation;
 
             var texture_box box2;
@@ -805,11 +824,6 @@ func draw_text(render render_2d_api ref, rotation = 0.0, alignment = [ 0, 0 ] ve
 
 func execute(render render_2d_api ref, gl gl_api ref, tmemory memory_arena ref)
 {
-    glEnable(GL_DEPTH_TEST);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
     var shaders = { minimum(render.shaders.required_count, render.shaders.count), render.shaders.base.base } render_2d_shader[];
     var textures = { minimum(render.textures.required_count, render.textures.count), render.textures.base.base } render_2d_texture[];
 
@@ -823,150 +837,279 @@ func execute(render render_2d_api ref, gl gl_api ref, tmemory memory_arena ref)
         return;
 
     {
-        var context_array render_2d_context[];
+        // var context_array render_2d_context[];
+//
+        // // first pass
+        // reallocate_array(tmemory, context_array ref, 1);
+        // context_array[0] = render.context;
+        // context_array[0].min_alpha = 0.49;
+//
+        // // second pass
+        // reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.context_buffer, context_array ref);
+        // reallocate_array(tmemory, context_array ref, context_array.count + 1);
+        // context_array[context_array.count - 1] = render.context;
+        // context_array[context_array.count - 1].min_alpha = 0;
 
-        // first pass
-        reallocate_array(tmemory, context_array ref, 1);
-        context_array[0] = render.context;
-        context_array[0].min_alpha = 1;
-
-        // second pass
-        reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.context_buffer, context_array ref);
-        reallocate_array(tmemory, context_array ref, context_array.count + 1);
-        context_array[context_array.count - 1] = render.context;
-        context_array[context_array.count - 1].min_alpha = 0;
-
-        resize_buffer(gl, render.context_buffer ref, render_2d_gl_buffer.context_buffer, context_array);
-        reallocate_array(tmemory, context_array ref, 0);
+        resize_buffer(gl, render.context_buffer ref, render_2d_gl_buffer.context_buffer, render.context ref);
+        //reallocate_array(tmemory, context_array ref, 0);
     }
 
+    // sort using radix sort
+    {
+        var sort = sort_begin(render, 3, tmemory);
+
+        // sort by texture
+        {
+            var is_init b8;
+            while sort_next(render, sort ref, textures.count cast(u32), is_init ref)
+            {
+                loop var sprite_index u32; sprite_count
+                    sort_item(render, sort ref, sprite_index, render.sprites.key[sprite_index].texture_index);
+            }
+        }
+
+        // sort by shader
+        {
+            var is_init b8;
+            while sort_next(render, sort ref, shaders.count cast(u32), is_init ref)
+            {
+                loop var sprite_index u32; sprite_count
+                    sort_item(render, sort ref, sprite_index, render.sprites.key[sprite_index].shader_index);
+            }
+        }
+
+        // sort by layer
+        {
+            var layer_count = (render.max_layer - render.min_layer) cast(u32) + 1;
+            var is_init b8;
+            while sort_next(render, sort ref, layer_count, is_init ref)
+            {
+                loop var sprite_index u32; sprite_count
+                    sort_item(render, sort ref, sprite_index, (render.sprites.key[sprite_index].layer - render.min_layer) cast(u32));
+            }
+        }
+
+        sort_end(render, tmemory, sort ref);
+
+        loop var sprite_index u32; sprite_count - 1
+        {
+            var left  = render.sprites.key[sprite_index];
+            var right = render.sprites.key[sprite_index + 1];
+
+            assert((left.layer <= right.layer) or (left.shader_index <= right.shader_index) or (left.texture_index <= right.texture_index));
+        }
+    }
+
+    var call_offset u32[64];
+    var call_count u32;
+
+    // upload data, so we can offset into different calls
     {
         var sprites render_2d_gl_sprite[];
 
-        loop var shader_index u32; shaders.count
+        call_offset[call_count] = 0;
+        call_count += 1;
+
+        var current_key render_2d_key = render.sprites.key[0];
+        loop var sprite_index u32; sprite_count
         {
-            loop var texture_index u32; textures.count
+            var key = render.sprites.key[sprite_index];
+            if (current_key.shader_index is_not key.shader_index) or (current_key.texture_index is_not key.texture_index)
             {
                 reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.sprite_buffer, sprites ref);
 
-                loop var sprite_index u32; sprite_count
-                {
-                    if (render.sprites.shader_index[sprite_index] is_not shader_index) or (render.sprites.texture_index[sprite_index] is_not texture_index)
-                        continue;
-
-                    reallocate_array(tmemory, sprites ref, sprites.count + 1);
-                    sprites[sprites.count - 1] = render.sprites[sprite_index];
-                }
+                call_offset[call_count] = sprites.count cast(u32);
+                call_count += 1;
             }
+
+            current_key = key;
+
+            reallocate_array(tmemory, sprites ref, sprites.count + 1);
+            sprites[sprites.count - 1] = render.sprites[sprite_index];
         }
 
         resize_buffer(gl, render.sprite_buffer ref, render_2d_gl_buffer.sprite_buffer, sprites);
         reallocate_array(tmemory, sprites ref, 0);
     }
 
+    // gl render
     {
-        var circles render_2d_gl_circle[];
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND);
 
-        loop var shader_index u32; shaders.count
+        // MAYBE: switch to premultiplied alpha?
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glBindVertexArray(render.gl_empty_vertex_array);
+
+        loop var shader_index; shaders.count
         {
-            loop var texture_index u32; textures.count
-            {
-                reallocate_array_to_uniform_buffer_offset_alignment(gl, tmemory, render.circle_buffer, circles ref);
-
-                loop var circle_index u32; circle_count
-                {
-                    if (render.circles.shader_index[circle_index] is_not shader_index) or (render.circles.texture_index[circle_index] is_not texture_index)
-                        continue;
-
-                    reallocate_array(tmemory, circles ref, circles.count + 1);
-                    circles[circles.count - 1] = render.circles[circle_index];
-                }
-            }
+            glUseProgram(render.shaders[shader_index].handle);
+            glUniform1i(render.shaders[shader_index].main_texture, 0);
         }
 
-        resize_buffer(gl, render.circle_buffer ref, render_2d_gl_buffer.circle_buffer, circles);
-        reallocate_array(tmemory, circles ref, 0);
-    }
-
-    glBindVertexArray(render.gl_empty_vertex_array);
-
-    var context_offset u32;
-    loop var pass u32; 2
-    {
-        uniform_buffer_align_offset(render.context_buffer, context_offset ref);
-        bind_uniform_buffer(gl, render.context_buffer, context_offset);
-        context_offset += 1;
-
-        glDepthMask((pass is 0) cast(GLboolean));
+        bind_uniform_buffer(gl, render.context_buffer);
 
         var sprite_offset u32;
-        loop var shader_index u32; shaders.count
+        var instance_count u32;
+
+        var current_key render_2d_key = render.sprites.key[0];
+
+        // force changing shader and texture on first call
+        var previous_key render_2d_key;
+        previous_key.shader_index  = current_key.shader_index + 1;
+        previous_key.texture_index = current_key.texture_index + 1;
+
+        var call_index u32;
+
+        loop var sprite_index u32; sprite_count
         {
-            glUseProgram(render.shaders[shader_index].handle);
-            glUniform1i(render.shaders[shader_index].main_texture, 0);
-
-            glActiveTexture(GL_TEXTURE0);
-
-            loop var texture_index u32; textures.count
+            var key = render.sprites.key[sprite_index];
+            if (current_key.shader_index is_not key.shader_index) or (current_key.texture_index is_not key.texture_index)
             {
-                var instance_count u32;
-                loop var sprite_index u32; sprite_count
-                {
-                    if (render.sprites.shader_index[sprite_index] is_not shader_index) or (render.sprites.texture_index[sprite_index] is_not texture_index)
-                        continue;
+                uniform_buffer_align_offset(render.sprite_buffer, sprite_offset ref);
 
-                    instance_count += 1;
-                }
+                assert(call_offset[call_index] is sprite_offset);
+                call_index += 1;
 
                 if instance_count
                 {
-                    glBindTexture(GL_TEXTURE_2D, textures[texture_index].handle);
+                    if current_key.shader_index is_not previous_key.shader_index
+                        glUseProgram(render.shaders[current_key.shader_index].handle);
 
-                    uniform_buffer_align_offset(render.sprite_buffer, sprite_offset ref);
+                    if current_key.texture_index is_not previous_key.texture_index
+                    {
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, textures[current_key.texture_index].handle);
+                    }
+
                     bind_uniform_buffer(gl, render.sprite_buffer, sprite_offset);
+
                     glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instance_count);
                 }
+
+                previous_key = current_key;
+                current_key = key;
 
                 sprite_offset += instance_count;
+                instance_count = 0;
             }
-        }
 
-        var circle_offset u32;
-        loop var shader_index u32; shaders.count
+            instance_count += 1;
+        }
+        assert((sprite_offset + instance_count) is sprite_count);
+
+        uniform_buffer_align_offset(render.sprite_buffer, sprite_offset ref);
+
+        if instance_count
         {
-            glUseProgram(render.shaders[shader_index].handle);
-            glUniform1i(render.shaders[shader_index].main_texture, 0);
+            if current_key.shader_index is_not previous_key.shader_index
+                glUseProgram(render.shaders[current_key.shader_index].handle);
 
-            glActiveTexture(GL_TEXTURE0);
-
-            loop var texture_index u32; textures.count
+            if current_key.texture_index is_not previous_key.texture_index
             {
-                var instance_count u32;
-                loop var circle_index u32; circle_count
-                {
-                    if (render.circles.shader_index[circle_index] is_not shader_index) or (render.circles.texture_index[circle_index] is_not texture_index)
-                        continue;
-
-                    instance_count += 1;
-                }
-
-                if instance_count
-                {
-                    glBindTexture(GL_TEXTURE_2D, textures[texture_index].handle);
-
-                    uniform_buffer_align_offset(render.circle_buffer, circle_offset ref);
-                    bind_uniform_buffer(gl, render.circle_buffer, circle_offset);
-                    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instance_count);
-                }
-
-                circle_offset += instance_count;
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, textures[current_key.texture_index].handle);
             }
+
+            bind_uniform_buffer(gl, render.sprite_buffer, sprite_offset);
+
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instance_count);
         }
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glUseProgram(0);
+        glBindVertexArray(0);
+    }
+}
+
+struct render_2d_radix_sort
+{
+    key    render_2d_key[][];
+    sprite render_2d_gl_sprite[][];
+    bucket_count_power_of_2 u32;
+    bucket_count            u32;
+    bucket_capacity u32;
+
+    // durint sort_next scope
+    bit_offset u32;
+}
+
+func sort_begin(render render_2d_api ref, bucket_count_power_of_2 u32, memory memory_arena ref) (result render_2d_radix_sort)
+{
+    var result render_2d_radix_sort;
+    result.bucket_count_power_of_2 = bucket_count_power_of_2;
+    result.bucket_capacity         = minimum(render.sprites.required_count, render.sprites.count) cast(u32);
+    result.bucket_count = 1 bit_shift_left result.bucket_count_power_of_2;
+
+    reallocate_array(memory, result.key ref,    result.bucket_count);
+    reallocate_array(memory, result.sprite ref, result.bucket_count);
+    clear(to_u8_array(result.key));
+    clear(to_u8_array(result.sprite));
+
+    reallocate_array(memory, result.key[0] ref,    result.bucket_count * result.bucket_capacity);
+    reallocate_array(memory, result.sprite[0] ref, result.bucket_count * result.bucket_capacity);
+
+    loop var i; result.bucket_count
+    {
+        result.key[i].base     = result.key[0].base    + (i * result.bucket_capacity);
+        result.sprite[i].base  = result.sprite[0].base + (i * result.bucket_capacity);
+        result.key[i].count    = result.bucket_capacity;
+        result.sprite[i].count = result.bucket_capacity;
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    return result;
+}
 
-    glDepthMask(GL_TRUE);
-    glUseProgram(0);
-    glBindVertexArray(0);
+func sort_next(render render_2d_api ref, sort render_2d_radix_sort ref, max_sort_value u32, is_init b8 ref) (ok b8)
+{
+    if is_init deref
+    {
+        var sprite_index u32;
+        loop var i; sort.bucket_count
+        {
+            var key    = sort.key[i];
+            var sprite = sort.sprite[i];
+
+            loop var j; key.count
+            {
+                render.sprites.key[sprite_index] = key[j];
+                render.sprites[sprite_index]    = sprite[j];
+                sprite_index += 1;
+            }
+        }
+        assert(sprite_index is sort.bucket_capacity);
+
+        sort.bit_offset += sort.bucket_count_power_of_2;
+    }
+    else
+    {
+        is_init deref = true;
+        sort.bit_offset = 0;
+    }
+
+    if not (max_sort_value bit_shift_right sort.bit_offset)
+        return false;
+
+    loop var i; sort.bucket_count
+        sort.key[i].count = 0;
+
+    return true;
+}
+
+func sort_item(render render_2d_api ref, sort render_2d_radix_sort ref, sprite_index u32, sort_value u32)
+{
+    var bucket_index = (sort_value bit_shift_right sort.bit_offset) bit_and (sort.bucket_count - 1);
+
+    var key = sort.key[bucket_index] ref;
+    assert(key.count < sort.bucket_capacity);
+    key[key.count]                       = render.sprites.key[sprite_index];
+    sort.sprite[bucket_index][key.count] = render.sprites[sprite_index];
+    key.count += 1;
+}
+
+func sort_end(render render_2d_api ref, memory memory_arena ref, sort render_2d_radix_sort ref)
+{
+    free(memory, sort.key.base);
 }

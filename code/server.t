@@ -280,6 +280,17 @@ func init(server game_server ref, platform platform_api ref, network platform_ne
     }
 
     platform_write_entire_file(platform, game_world_map_path, value_to_u8_array(server.game.tile_map));
+
+    // plant some test grass
+    loop var y = 4; 10
+    {
+        loop var x = 4; 10
+        {
+            var id = add(server.game ref, game_entity_tag.tall_grass, new_network_id(server));
+            var entity = get(server.game ref, id);
+            entity.position = [ x, y ] vec2 + 0.5;
+        }
+    }
 }
 
 func save(platform platform_api ref, server game_server ref)

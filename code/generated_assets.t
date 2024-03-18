@@ -2,242 +2,250 @@
 enum asset_sprite_id
 {
     none;
-    kenny_rpg_tile_rpgtile000;
-    kenny_rpg_tile_rpgtile001;
-    kenny_rpg_tile_rpgtile002;
-    kenny_rpg_tile_rpgtile003;
-    kenny_rpg_tile_rpgtile004;
-    kenny_rpg_tile_rpgtile005;
-    kenny_rpg_tile_rpgtile006;
-    kenny_rpg_tile_rpgtile007;
-    kenny_rpg_tile_rpgtile008;
-    kenny_rpg_tile_rpgtile009;
-    kenny_rpg_tile_rpgtile010;
-    kenny_rpg_tile_rpgtile011;
-    kenny_rpg_tile_rpgtile012;
-    kenny_rpg_tile_rpgtile013;
-    kenny_rpg_tile_rpgtile014;
-    kenny_rpg_tile_rpgtile015;
-    kenny_rpg_tile_rpgtile016;
-    kenny_rpg_tile_rpgtile017;
-    kenny_rpg_tile_rpgtile018;
-    kenny_rpg_tile_rpgtile019;
-    kenny_rpg_tile_rpgtile020;
-    kenny_rpg_tile_rpgtile021;
-    kenny_rpg_tile_rpgtile022;
-    kenny_rpg_tile_rpgtile023;
-    kenny_rpg_tile_rpgtile024;
-    kenny_rpg_tile_rpgtile025;
-    kenny_rpg_tile_rpgtile026;
-    kenny_rpg_tile_rpgtile027;
-    kenny_rpg_tile_rpgtile028;
-    kenny_rpg_tile_rpgtile029;
-    kenny_rpg_tile_rpgtile030;
-    kenny_rpg_tile_rpgtile031;
-    kenny_rpg_tile_rpgtile031_alt;
-    kenny_rpg_tile_rpgtile032;
-    kenny_rpg_tile_rpgtile033;
-    kenny_rpg_tile_rpgtile034;
-    kenny_rpg_tile_rpgtile035;
-    kenny_rpg_tile_rpgtile036;
-    kenny_rpg_tile_rpgtile037;
-    kenny_rpg_tile_rpgtile038;
-    kenny_rpg_tile_rpgtile039;
-    kenny_rpg_tile_rpgtile040;
-    kenny_rpg_tile_rpgtile041;
-    kenny_rpg_tile_rpgtile042;
-    kenny_rpg_tile_rpgtile043;
-    kenny_rpg_tile_rpgtile044;
-    kenny_rpg_tile_rpgtile045;
-    kenny_rpg_tile_rpgtile046;
-    kenny_rpg_tile_rpgtile047;
-    kenny_rpg_tile_rpgtile048;
-    kenny_rpg_tile_rpgtile049;
-    kenny_rpg_tile_rpgtile050;
-    kenny_rpg_tile_rpgtile051;
-    kenny_rpg_tile_rpgtile052;
-    kenny_rpg_tile_rpgtile053;
-    kenny_rpg_tile_rpgtile054;
-    kenny_rpg_tile_rpgtile055;
-    kenny_rpg_tile_rpgtile056;
-    kenny_rpg_tile_rpgtile057;
-    kenny_rpg_tile_rpgtile058;
-    kenny_rpg_tile_rpgtile059;
-    kenny_rpg_tile_rpgtile060;
-    kenny_rpg_tile_rpgtile061;
-    kenny_rpg_tile_rpgtile062;
-    kenny_rpg_tile_rpgtile063;
-    kenny_rpg_tile_rpgtile064;
-    kenny_rpg_tile_rpgtile065;
-    kenny_rpg_tile_rpgtile066;
-    kenny_rpg_tile_rpgtile067;
-    kenny_rpg_tile_rpgtile068;
-    kenny_rpg_tile_rpgtile069;
-    kenny_rpg_tile_rpgtile070;
-    kenny_rpg_tile_rpgtile071;
-    kenny_rpg_tile_rpgtile072;
-    kenny_rpg_tile_rpgtile073;
-    kenny_rpg_tile_rpgtile074;
-    kenny_rpg_tile_rpgtile075;
-    kenny_rpg_tile_rpgtile076;
-    kenny_rpg_tile_rpgtile077;
-    kenny_rpg_tile_rpgtile078;
-    kenny_rpg_tile_rpgtile079;
-    kenny_rpg_tile_rpgtile080;
-    kenny_rpg_tile_rpgtile081;
-    kenny_rpg_tile_rpgtile082;
-    kenny_rpg_tile_rpgtile083;
-    kenny_rpg_tile_rpgtile084;
-    kenny_rpg_tile_rpgtile085;
-    kenny_rpg_tile_rpgtile086;
-    kenny_rpg_tile_rpgtile087;
-    kenny_rpg_tile_rpgtile088;
-    kenny_rpg_tile_rpgtile089;
-    kenny_rpg_tile_rpgtile090;
-    kenny_rpg_tile_rpgtile091;
-    kenny_rpg_tile_rpgtile092;
-    kenny_rpg_tile_rpgtile093;
-    kenny_rpg_tile_rpgtile094;
-    kenny_rpg_tile_rpgtile095;
-    kenny_rpg_tile_rpgtile096;
-    kenny_rpg_tile_rpgtile097;
-    kenny_rpg_tile_rpgtile098;
-    kenny_rpg_tile_rpgtile099;
-    kenny_rpg_tile_rpgtile100;
-    kenny_rpg_tile_rpgtile101;
-    kenny_rpg_tile_rpgtile102;
-    kenny_rpg_tile_rpgtile103;
-    kenny_rpg_tile_rpgtile104;
-    kenny_rpg_tile_rpgtile105;
-    kenny_rpg_tile_rpgtile106;
-    kenny_rpg_tile_rpgtile107;
-    kenny_rpg_tile_rpgtile108;
-    kenny_rpg_tile_rpgtile109;
-    kenny_rpg_tile_rpgtile110;
-    kenny_rpg_tile_rpgtile111;
-    kenny_rpg_tile_rpgtile112;
-    kenny_rpg_tile_rpgtile113;
-    kenny_rpg_tile_rpgtile114;
-    kenny_rpg_tile_rpgtile115;
-    kenny_rpg_tile_rpgtile116;
-    kenny_rpg_tile_rpgtile117;
-    kenny_rpg_tile_rpgtile118;
-    kenny_rpg_tile_rpgtile119;
-    kenny_rpg_tile_rpgtile120;
-    kenny_rpg_tile_rpgtile121;
-    kenny_rpg_tile_rpgtile122;
-    kenny_rpg_tile_rpgtile123;
-    kenny_rpg_tile_rpgtile124;
-    kenny_rpg_tile_rpgtile125;
-    kenny_rpg_tile_rpgtile126;
-    kenny_rpg_tile_rpgtile127;
-    kenny_rpg_tile_rpgtile128;
-    kenny_rpg_tile_rpgtile129;
-    kenny_rpg_tile_rpgtile130;
-    kenny_rpg_tile_rpgtile131;
-    kenny_rpg_tile_rpgtile132;
-    kenny_rpg_tile_rpgtile133;
-    kenny_rpg_tile_rpgtile134;
-    kenny_rpg_tile_rpgtile135;
-    kenny_rpg_tile_rpgtile136;
-    kenny_rpg_tile_rpgtile137;
-    kenny_rpg_tile_rpgtile138;
-    kenny_rpg_tile_rpgtile139;
-    kenny_rpg_tile_rpgtile140;
-    kenny_rpg_tile_rpgtile141;
-    kenny_rpg_tile_rpgtile142;
-    kenny_rpg_tile_rpgtile143;
-    kenny_rpg_tile_rpgtile144;
-    kenny_rpg_tile_rpgtile145;
-    kenny_rpg_tile_rpgtile146;
-    kenny_rpg_tile_rpgtile147;
-    kenny_rpg_tile_rpgtile148;
-    kenny_rpg_tile_rpgtile149;
-    kenny_rpg_tile_rpgtile150;
-    kenny_rpg_tile_rpgtile151;
-    kenny_rpg_tile_rpgtile152;
-    kenny_rpg_tile_rpgtile153;
-    kenny_rpg_tile_rpgtile154;
-    kenny_rpg_tile_rpgtile155;
-    kenny_rpg_tile_rpgtile156;
-    kenny_rpg_tile_rpgtile157;
-    kenny_rpg_tile_rpgtile158;
-    kenny_rpg_tile_rpgtile159;
-    kenny_rpg_tile_rpgtile160;
-    kenny_rpg_tile_rpgtile161;
-    kenny_rpg_tile_rpgtile162;
-    kenny_rpg_tile_rpgtile163;
-    kenny_rpg_tile_rpgtile164;
-    kenny_rpg_tile_rpgtile165;
-    kenny_rpg_tile_rpgtile166;
-    kenny_rpg_tile_rpgtile167;
-    kenny_rpg_tile_rpgtile168;
-    kenny_rpg_tile_rpgtile169;
-    kenny_rpg_tile_rpgtile170;
-    kenny_rpg_tile_rpgtile171;
-    kenny_rpg_tile_rpgtile172;
-    kenny_rpg_tile_rpgtile173;
-    kenny_rpg_tile_rpgtile174;
-    kenny_rpg_tile_rpgtile175;
-    kenny_rpg_tile_rpgtile176;
-    kenny_rpg_tile_rpgtile177;
-    kenny_rpg_tile_rpgtile178;
-    kenny_rpg_tile_rpgtile179;
-    kenny_rpg_tile_rpgtile180;
-    kenny_rpg_tile_rpgtile181;
-    kenny_rpg_tile_rpgtile182;
-    kenny_rpg_tile_rpgtile183;
-    kenny_rpg_tile_rpgtile184;
-    kenny_rpg_tile_rpgtile185;
-    kenny_rpg_tile_rpgtile186;
-    kenny_rpg_tile_rpgtile187;
-    kenny_rpg_tile_rpgtile188;
-    kenny_rpg_tile_rpgtile189;
-    kenny_rpg_tile_rpgtile190;
-    kenny_rpg_tile_rpgtile191;
-    kenny_rpg_tile_rpgtile192;
-    kenny_rpg_tile_rpgtile193;
-    kenny_rpg_tile_rpgtile194;
-    kenny_rpg_tile_rpgtile195;
-    kenny_rpg_tile_rpgtile196;
-    kenny_rpg_tile_rpgtile197;
-    kenny_rpg_tile_rpgtile198;
-    kenny_rpg_tile_rpgtile199;
-    kenny_rpg_tile_rpgtile200;
-    kenny_rpg_tile_rpgtile201;
-    kenny_rpg_tile_rpgtile202;
-    kenny_rpg_tile_rpgtile203;
-    kenny_rpg_tile_rpgtile204;
-    kenny_rpg_tile_rpgtile205;
-    kenny_rpg_tile_rpgtile206;
-    kenny_rpg_tile_rpgtile207;
-    kenny_rpg_tile_rpgtile208;
-    kenny_rpg_tile_rpgtile209;
-    kenny_rpg_tile_rpgtile210;
-    kenny_rpg_tile_rpgtile211;
-    kenny_rpg_tile_rpgtile212;
-    kenny_rpg_tile_rpgtile213;
-    kenny_rpg_tile_rpgtile214;
-    kenny_rpg_tile_rpgtile215;
-    kenny_rpg_tile_rpgtile216;
-    kenny_rpg_tile_rpgtile217;
-    kenny_rpg_tile_rpgtile218;
-    kenny_rpg_tile_rpgtile219;
-    kenny_rpg_tile_rpgtile220;
-    kenny_rpg_tile_rpgtile221;
-    kenny_rpg_tile_rpgtile222;
-    kenny_rpg_tile_rpgtile223;
-    kenny_rpg_tile_rpgtile224;
-    kenny_rpg_tile_rpgtile225;
-    kenny_rpg_tile_rpgtile226;
-    kenny_rpg_tile_rpgtile227;
-    kenny_rpg_tile_rpgtile228;
+    tile_rpgtile000;
+    tile_rpgtile001;
+    tile_rpgtile002;
+    tile_rpgtile003;
+    tile_rpgtile004;
+    tile_rpgtile005;
+    tile_rpgtile006;
+    tile_rpgtile007;
+    tile_rpgtile008;
+    tile_rpgtile009;
+    tile_rpgtile010;
+    tile_rpgtile011;
+    tile_rpgtile012;
+    tile_rpgtile013;
+    tile_rpgtile014;
+    tile_rpgtile015;
+    tile_rpgtile016;
+    tile_rpgtile017;
+    tile_rpgtile018;
+    tile_rpgtile019;
+    tile_rpgtile020;
+    tile_rpgtile021;
+    tile_rpgtile022;
+    tile_rpgtile023;
+    tile_rpgtile024;
+    tile_rpgtile025;
+    tile_rpgtile026;
+    tile_rpgtile027;
+    tile_rpgtile028;
+    tile_rpgtile029;
+    tile_rpgtile030;
+    tile_rpgtile031;
+    tile_rpgtile031_alt;
+    tile_rpgtile032;
+    tile_rpgtile033;
+    tile_rpgtile034;
+    tile_rpgtile035;
+    tile_rpgtile036;
+    tile_rpgtile037;
+    tile_rpgtile038;
+    tile_rpgtile039;
+    tile_rpgtile040;
+    tile_rpgtile041;
+    tile_rpgtile042;
+    tile_rpgtile043;
+    tile_rpgtile044;
+    tile_rpgtile045;
+    tile_rpgtile046;
+    tile_rpgtile047;
+    tile_rpgtile048;
+    tile_rpgtile049;
+    tile_rpgtile050;
+    tile_rpgtile051;
+    tile_rpgtile052;
+    tile_rpgtile053;
+    tile_rpgtile054;
+    tile_rpgtile055;
+    tile_rpgtile056;
+    tile_rpgtile057;
+    tile_rpgtile058;
+    tile_rpgtile059;
+    tile_rpgtile060;
+    tile_rpgtile061;
+    tile_rpgtile062;
+    tile_rpgtile063;
+    tile_rpgtile064;
+    tile_rpgtile065;
+    tile_rpgtile066;
+    tile_rpgtile067;
+    tile_rpgtile068;
+    tile_rpgtile069;
+    tile_rpgtile070;
+    tile_rpgtile071;
+    tile_rpgtile072;
+    tile_rpgtile073;
+    tile_rpgtile074;
+    tile_rpgtile075;
+    tile_rpgtile076;
+    tile_rpgtile077;
+    tile_rpgtile078;
+    tile_rpgtile079;
+    tile_rpgtile080;
+    tile_rpgtile081;
+    tile_rpgtile082;
+    tile_rpgtile083;
+    tile_rpgtile084;
+    tile_rpgtile085;
+    tile_rpgtile086;
+    tile_rpgtile087;
+    tile_rpgtile088;
+    tile_rpgtile089;
+    tile_rpgtile090;
+    tile_rpgtile091;
+    tile_rpgtile092;
+    tile_rpgtile093;
+    tile_rpgtile094;
+    tile_rpgtile095;
+    tile_rpgtile096;
+    tile_rpgtile097;
+    tile_rpgtile098;
+    tile_rpgtile099;
+    tile_rpgtile100;
+    tile_rpgtile101;
+    tile_rpgtile102;
+    tile_rpgtile103;
+    tile_rpgtile104;
+    tile_rpgtile105;
+    tile_rpgtile106;
+    tile_rpgtile107;
+    tile_rpgtile108;
+    tile_rpgtile109;
+    tile_rpgtile110;
+    tile_rpgtile111;
+    tile_rpgtile112;
+    tile_rpgtile113;
+    tile_rpgtile114;
+    tile_rpgtile115;
+    tile_rpgtile116;
+    tile_rpgtile117;
+    tile_rpgtile118;
+    tile_rpgtile119;
+    tile_rpgtile120;
+    tile_rpgtile121;
+    tile_rpgtile122;
+    tile_rpgtile123;
+    tile_rpgtile124;
+    tile_rpgtile125;
+    tile_rpgtile126;
+    tile_rpgtile127;
+    tile_rpgtile128;
+    tile_rpgtile129;
+    tile_rpgtile130;
+    tile_rpgtile131;
+    tile_rpgtile132;
+    tile_rpgtile133;
+    tile_rpgtile134;
+    tile_rpgtile135;
+    tile_rpgtile136;
+    tile_rpgtile137;
+    tile_rpgtile138;
+    tile_rpgtile139;
+    tile_rpgtile140;
+    tile_rpgtile141;
+    tile_rpgtile142;
+    tile_rpgtile143;
+    tile_rpgtile144;
+    tile_rpgtile145;
+    tile_rpgtile146;
+    tile_rpgtile147;
+    tile_rpgtile148;
+    tile_rpgtile149;
+    tile_rpgtile150;
+    tile_rpgtile151;
+    tile_rpgtile152;
+    tile_rpgtile153;
+    tile_rpgtile154;
+    tile_rpgtile155;
+    tile_rpgtile156;
+    tile_rpgtile157;
+    tile_rpgtile158;
+    tile_rpgtile159;
+    tile_rpgtile160;
+    tile_rpgtile161;
+    tile_rpgtile162;
+    tile_rpgtile163;
+    tile_rpgtile164;
+    tile_rpgtile165;
+    tile_rpgtile166;
+    tile_rpgtile167;
+    tile_rpgtile168;
+    tile_rpgtile169;
+    tile_rpgtile170;
+    tile_rpgtile171;
+    tile_rpgtile172;
+    tile_rpgtile173;
+    tile_rpgtile174;
+    tile_rpgtile175;
+    tile_rpgtile176;
+    tile_rpgtile177;
+    tile_rpgtile178;
+    tile_rpgtile179;
+    tile_rpgtile180;
+    tile_rpgtile181;
+    tile_rpgtile182;
+    tile_rpgtile183;
+    tile_rpgtile184;
+    tile_rpgtile185;
+    tile_rpgtile186;
+    tile_rpgtile187;
+    tile_rpgtile188;
+    tile_rpgtile189;
+    tile_rpgtile190;
+    tile_rpgtile191;
+    tile_rpgtile192;
+    tile_rpgtile193;
+    tile_rpgtile194;
+    tile_rpgtile195;
+    tile_rpgtile196;
+    tile_rpgtile197;
+    tile_rpgtile198;
+    tile_rpgtile199;
+    tile_rpgtile200;
+    tile_rpgtile201;
+    tile_rpgtile202;
+    tile_rpgtile203;
+    tile_rpgtile204;
+    tile_rpgtile205;
+    tile_rpgtile206;
+    tile_rpgtile207;
+    tile_rpgtile208;
+    tile_rpgtile209;
+    tile_rpgtile210;
+    tile_rpgtile211;
+    tile_rpgtile212;
+    tile_rpgtile213;
+    tile_rpgtile214;
+    tile_rpgtile215;
+    tile_rpgtile216;
+    tile_rpgtile217;
+    tile_rpgtile218;
+    tile_rpgtile219;
+    tile_rpgtile220;
+    tile_rpgtile221;
+    tile_rpgtile222;
+    tile_rpgtile223;
+    tile_rpgtile224;
+    tile_rpgtile225;
+    tile_rpgtile226;
+    tile_rpgtile227;
+    tile_rpgtile228;
     entity_chicken_back;
     entity_chicken_front;
     entity_dog_back;
     entity_dog_front;
+    entity_grass1;
+    entity_grass2;
+    entity_grass3;
+    entity_grass4;
     entity_player_tent_back;
     entity_player_tent_front;
+    entity_tall_grass_1;
+    entity_tall_grass_2;
+    entity_tall_grass_3;
+    entity_tall_grass_4;
     item_fireball;
     item_flag_blue;
     item_flag_red;
@@ -248,242 +256,250 @@ enum asset_sprite_id
 
 def asset_sprite_paths =
 [
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile000.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile001.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile002.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile003.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile004.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile005.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile006.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile007.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile008.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile009.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile010.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile011.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile012.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile013.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile014.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile015.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile016.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile017.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile018.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile019.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile020.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile021.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile022.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile023.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile024.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile025.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile026.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile027.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile028.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile029.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile030.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile031.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile031_alt.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile032.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile033.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile034.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile035.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile036.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile037.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile038.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile039.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile040.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile041.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile042.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile043.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile044.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile045.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile046.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile047.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile048.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile049.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile050.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile051.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile052.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile053.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile054.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile055.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile056.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile057.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile058.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile059.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile060.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile061.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile062.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile063.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile064.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile065.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile066.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile067.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile068.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile069.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile070.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile071.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile072.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile073.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile074.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile075.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile076.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile077.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile078.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile079.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile080.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile081.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile082.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile083.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile084.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile085.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile086.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile087.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile088.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile089.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile090.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile091.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile092.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile093.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile094.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile095.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile096.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile097.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile098.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile099.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile100.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile101.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile102.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile103.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile104.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile105.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile106.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile107.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile108.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile109.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile110.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile111.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile112.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile113.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile114.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile115.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile116.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile117.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile118.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile119.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile120.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile121.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile122.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile123.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile124.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile125.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile126.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile127.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile128.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile129.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile130.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile131.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile132.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile133.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile134.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile135.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile136.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile137.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile138.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile139.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile140.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile141.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile142.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile143.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile144.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile145.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile146.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile147.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile148.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile149.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile150.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile151.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile152.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile153.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile154.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile155.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile156.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile157.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile158.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile159.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile160.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile161.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile162.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile163.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile164.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile165.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile166.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile167.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile168.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile169.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile170.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile171.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile172.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile173.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile174.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile175.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile176.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile177.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile178.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile179.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile180.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile181.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile182.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile183.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile184.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile185.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile186.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile187.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile188.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile189.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile190.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile191.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile192.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile193.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile194.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile195.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile196.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile197.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile198.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile199.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile200.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile201.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile202.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile203.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile204.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile205.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile206.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile207.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile208.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile209.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile210.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile211.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile212.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile213.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile214.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile215.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile216.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile217.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile218.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile219.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile220.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile221.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile222.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile223.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile224.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile225.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile226.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile227.png",
-    "assets/tiles/RPG Tiles Vector/PNG/rpgTile228.png",
+    "assets/tiles/rpgTile000.png",
+    "assets/tiles/rpgTile001.png",
+    "assets/tiles/rpgTile002.png",
+    "assets/tiles/rpgTile003.png",
+    "assets/tiles/rpgTile004.png",
+    "assets/tiles/rpgTile005.png",
+    "assets/tiles/rpgTile006.png",
+    "assets/tiles/rpgTile007.png",
+    "assets/tiles/rpgTile008.png",
+    "assets/tiles/rpgTile009.png",
+    "assets/tiles/rpgTile010.png",
+    "assets/tiles/rpgTile011.png",
+    "assets/tiles/rpgTile012.png",
+    "assets/tiles/rpgTile013.png",
+    "assets/tiles/rpgTile014.png",
+    "assets/tiles/rpgTile015.png",
+    "assets/tiles/rpgTile016.png",
+    "assets/tiles/rpgTile017.png",
+    "assets/tiles/rpgTile018.png",
+    "assets/tiles/rpgTile019.png",
+    "assets/tiles/rpgTile020.png",
+    "assets/tiles/rpgTile021.png",
+    "assets/tiles/rpgTile022.png",
+    "assets/tiles/rpgTile023.png",
+    "assets/tiles/rpgTile024.png",
+    "assets/tiles/rpgTile025.png",
+    "assets/tiles/rpgTile026.png",
+    "assets/tiles/rpgTile027.png",
+    "assets/tiles/rpgTile028.png",
+    "assets/tiles/rpgTile029.png",
+    "assets/tiles/rpgTile030.png",
+    "assets/tiles/rpgTile031.png",
+    "assets/tiles/rpgTile031_alt.png",
+    "assets/tiles/rpgTile032.png",
+    "assets/tiles/rpgTile033.png",
+    "assets/tiles/rpgTile034.png",
+    "assets/tiles/rpgTile035.png",
+    "assets/tiles/rpgTile036.png",
+    "assets/tiles/rpgTile037.png",
+    "assets/tiles/rpgTile038.png",
+    "assets/tiles/rpgTile039.png",
+    "assets/tiles/rpgTile040.png",
+    "assets/tiles/rpgTile041.png",
+    "assets/tiles/rpgTile042.png",
+    "assets/tiles/rpgTile043.png",
+    "assets/tiles/rpgTile044.png",
+    "assets/tiles/rpgTile045.png",
+    "assets/tiles/rpgTile046.png",
+    "assets/tiles/rpgTile047.png",
+    "assets/tiles/rpgTile048.png",
+    "assets/tiles/rpgTile049.png",
+    "assets/tiles/rpgTile050.png",
+    "assets/tiles/rpgTile051.png",
+    "assets/tiles/rpgTile052.png",
+    "assets/tiles/rpgTile053.png",
+    "assets/tiles/rpgTile054.png",
+    "assets/tiles/rpgTile055.png",
+    "assets/tiles/rpgTile056.png",
+    "assets/tiles/rpgTile057.png",
+    "assets/tiles/rpgTile058.png",
+    "assets/tiles/rpgTile059.png",
+    "assets/tiles/rpgTile060.png",
+    "assets/tiles/rpgTile061.png",
+    "assets/tiles/rpgTile062.png",
+    "assets/tiles/rpgTile063.png",
+    "assets/tiles/rpgTile064.png",
+    "assets/tiles/rpgTile065.png",
+    "assets/tiles/rpgTile066.png",
+    "assets/tiles/rpgTile067.png",
+    "assets/tiles/rpgTile068.png",
+    "assets/tiles/rpgTile069.png",
+    "assets/tiles/rpgTile070.png",
+    "assets/tiles/rpgTile071.png",
+    "assets/tiles/rpgTile072.png",
+    "assets/tiles/rpgTile073.png",
+    "assets/tiles/rpgTile074.png",
+    "assets/tiles/rpgTile075.png",
+    "assets/tiles/rpgTile076.png",
+    "assets/tiles/rpgTile077.png",
+    "assets/tiles/rpgTile078.png",
+    "assets/tiles/rpgTile079.png",
+    "assets/tiles/rpgTile080.png",
+    "assets/tiles/rpgTile081.png",
+    "assets/tiles/rpgTile082.png",
+    "assets/tiles/rpgTile083.png",
+    "assets/tiles/rpgTile084.png",
+    "assets/tiles/rpgTile085.png",
+    "assets/tiles/rpgTile086.png",
+    "assets/tiles/rpgTile087.png",
+    "assets/tiles/rpgTile088.png",
+    "assets/tiles/rpgTile089.png",
+    "assets/tiles/rpgTile090.png",
+    "assets/tiles/rpgTile091.png",
+    "assets/tiles/rpgTile092.png",
+    "assets/tiles/rpgTile093.png",
+    "assets/tiles/rpgTile094.png",
+    "assets/tiles/rpgTile095.png",
+    "assets/tiles/rpgTile096.png",
+    "assets/tiles/rpgTile097.png",
+    "assets/tiles/rpgTile098.png",
+    "assets/tiles/rpgTile099.png",
+    "assets/tiles/rpgTile100.png",
+    "assets/tiles/rpgTile101.png",
+    "assets/tiles/rpgTile102.png",
+    "assets/tiles/rpgTile103.png",
+    "assets/tiles/rpgTile104.png",
+    "assets/tiles/rpgTile105.png",
+    "assets/tiles/rpgTile106.png",
+    "assets/tiles/rpgTile107.png",
+    "assets/tiles/rpgTile108.png",
+    "assets/tiles/rpgTile109.png",
+    "assets/tiles/rpgTile110.png",
+    "assets/tiles/rpgTile111.png",
+    "assets/tiles/rpgTile112.png",
+    "assets/tiles/rpgTile113.png",
+    "assets/tiles/rpgTile114.png",
+    "assets/tiles/rpgTile115.png",
+    "assets/tiles/rpgTile116.png",
+    "assets/tiles/rpgTile117.png",
+    "assets/tiles/rpgTile118.png",
+    "assets/tiles/rpgTile119.png",
+    "assets/tiles/rpgTile120.png",
+    "assets/tiles/rpgTile121.png",
+    "assets/tiles/rpgTile122.png",
+    "assets/tiles/rpgTile123.png",
+    "assets/tiles/rpgTile124.png",
+    "assets/tiles/rpgTile125.png",
+    "assets/tiles/rpgTile126.png",
+    "assets/tiles/rpgTile127.png",
+    "assets/tiles/rpgTile128.png",
+    "assets/tiles/rpgTile129.png",
+    "assets/tiles/rpgTile130.png",
+    "assets/tiles/rpgTile131.png",
+    "assets/tiles/rpgTile132.png",
+    "assets/tiles/rpgTile133.png",
+    "assets/tiles/rpgTile134.png",
+    "assets/tiles/rpgTile135.png",
+    "assets/tiles/rpgTile136.png",
+    "assets/tiles/rpgTile137.png",
+    "assets/tiles/rpgTile138.png",
+    "assets/tiles/rpgTile139.png",
+    "assets/tiles/rpgTile140.png",
+    "assets/tiles/rpgTile141.png",
+    "assets/tiles/rpgTile142.png",
+    "assets/tiles/rpgTile143.png",
+    "assets/tiles/rpgTile144.png",
+    "assets/tiles/rpgTile145.png",
+    "assets/tiles/rpgTile146.png",
+    "assets/tiles/rpgTile147.png",
+    "assets/tiles/rpgTile148.png",
+    "assets/tiles/rpgTile149.png",
+    "assets/tiles/rpgTile150.png",
+    "assets/tiles/rpgTile151.png",
+    "assets/tiles/rpgTile152.png",
+    "assets/tiles/rpgTile153.png",
+    "assets/tiles/rpgTile154.png",
+    "assets/tiles/rpgTile155.png",
+    "assets/tiles/rpgTile156.png",
+    "assets/tiles/rpgTile157.png",
+    "assets/tiles/rpgTile158.png",
+    "assets/tiles/rpgTile159.png",
+    "assets/tiles/rpgTile160.png",
+    "assets/tiles/rpgTile161.png",
+    "assets/tiles/rpgTile162.png",
+    "assets/tiles/rpgTile163.png",
+    "assets/tiles/rpgTile164.png",
+    "assets/tiles/rpgTile165.png",
+    "assets/tiles/rpgTile166.png",
+    "assets/tiles/rpgTile167.png",
+    "assets/tiles/rpgTile168.png",
+    "assets/tiles/rpgTile169.png",
+    "assets/tiles/rpgTile170.png",
+    "assets/tiles/rpgTile171.png",
+    "assets/tiles/rpgTile172.png",
+    "assets/tiles/rpgTile173.png",
+    "assets/tiles/rpgTile174.png",
+    "assets/tiles/rpgTile175.png",
+    "assets/tiles/rpgTile176.png",
+    "assets/tiles/rpgTile177.png",
+    "assets/tiles/rpgTile178.png",
+    "assets/tiles/rpgTile179.png",
+    "assets/tiles/rpgTile180.png",
+    "assets/tiles/rpgTile181.png",
+    "assets/tiles/rpgTile182.png",
+    "assets/tiles/rpgTile183.png",
+    "assets/tiles/rpgTile184.png",
+    "assets/tiles/rpgTile185.png",
+    "assets/tiles/rpgTile186.png",
+    "assets/tiles/rpgTile187.png",
+    "assets/tiles/rpgTile188.png",
+    "assets/tiles/rpgTile189.png",
+    "assets/tiles/rpgTile190.png",
+    "assets/tiles/rpgTile191.png",
+    "assets/tiles/rpgTile192.png",
+    "assets/tiles/rpgTile193.png",
+    "assets/tiles/rpgTile194.png",
+    "assets/tiles/rpgTile195.png",
+    "assets/tiles/rpgTile196.png",
+    "assets/tiles/rpgTile197.png",
+    "assets/tiles/rpgTile198.png",
+    "assets/tiles/rpgTile199.png",
+    "assets/tiles/rpgTile200.png",
+    "assets/tiles/rpgTile201.png",
+    "assets/tiles/rpgTile202.png",
+    "assets/tiles/rpgTile203.png",
+    "assets/tiles/rpgTile204.png",
+    "assets/tiles/rpgTile205.png",
+    "assets/tiles/rpgTile206.png",
+    "assets/tiles/rpgTile207.png",
+    "assets/tiles/rpgTile208.png",
+    "assets/tiles/rpgTile209.png",
+    "assets/tiles/rpgTile210.png",
+    "assets/tiles/rpgTile211.png",
+    "assets/tiles/rpgTile212.png",
+    "assets/tiles/rpgTile213.png",
+    "assets/tiles/rpgTile214.png",
+    "assets/tiles/rpgTile215.png",
+    "assets/tiles/rpgTile216.png",
+    "assets/tiles/rpgTile217.png",
+    "assets/tiles/rpgTile218.png",
+    "assets/tiles/rpgTile219.png",
+    "assets/tiles/rpgTile220.png",
+    "assets/tiles/rpgTile221.png",
+    "assets/tiles/rpgTile222.png",
+    "assets/tiles/rpgTile223.png",
+    "assets/tiles/rpgTile224.png",
+    "assets/tiles/rpgTile225.png",
+    "assets/tiles/rpgTile226.png",
+    "assets/tiles/rpgTile227.png",
+    "assets/tiles/rpgTile228.png",
     "assets/entities/chicken_back.png",
     "assets/entities/chicken_front.png",
     "assets/entities/dog_back.png",
     "assets/entities/dog_front.png",
+    "assets/entities/grass1.png",
+    "assets/entities/grass2.png",
+    "assets/entities/grass3.png",
+    "assets/entities/grass4.png",
     "assets/entities/player_tent_back.png",
     "assets/entities/player_tent_front.png",
+    "assets/entities/tall_grass_1.png",
+    "assets/entities/tall_grass_2.png",
+    "assets/entities/tall_grass_3.png",
+    "assets/entities/tall_grass_4.png",
     "assets/items/fireball.png",
     "assets/items/flag_blue.png",
     "assets/items/flag_red.png",

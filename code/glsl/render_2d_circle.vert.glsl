@@ -5,7 +5,7 @@ layout (std140, column_major) uniform context_buffer
     vec2  viewport_size;
     vec2  draw_offset;
     float draw_scale;
-    float min_alpha;
+    float _unsued;
 };
 
 struct render_2d_gl_circle

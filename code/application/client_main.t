@@ -433,7 +433,7 @@ func game_update program_update_type
         if not is_init
         {
             var sprite_paths asset_path[];
-            asset_paths_append(sprite_paths ref, platform, "assets/tiles/RPG Tiles Vector/PNG/", "kenny_rpg_tile", tmemory);
+            asset_paths_append(sprite_paths ref, platform, "assets/tiles/", "tile", tmemory);
             asset_paths_append(sprite_paths ref, platform, "assets/entities/", "entity", tmemory);
             asset_paths_append(sprite_paths ref, platform, "assets/items/", "item", tmemory);
             asset_generate_sprite_ids(sprite_paths, platform, tmemory);
@@ -885,7 +885,7 @@ func game_update program_update_type
 
             // start render 2d frame after camera positoin update
             {
-                var context = { ui.viewport_size, tile_offset, tile_size, 1.0 } render_2d_context;
+                var context = { ui.viewport_size, tile_offset, tile_size, {} f32[3] } render_2d_context;
 
                 var sprite_paths string[];
                 reallocate_array(tmemory, sprite_paths ref, asset_sprite_paths.count + state.custom_sprite_paths.count);
@@ -913,7 +913,7 @@ func game_update program_update_type
             dfont.cursor.baseline_x = 100;
             dfont.cursor.baseline_y = (ui.viewport_size.y - 100) cast(s32);
             dfont.cursor.line_start_x = dfont.cursor.baseline_x;
-            dfont.cursor.depth = 0.01;
+            dfont.cursor.layer = 1;
 
             var global text_rotation f32;
             text_rotation = fmod(text_rotation + platform.delta_seconds, 1.0);
@@ -961,7 +961,7 @@ func game_update program_update_type
                 var transform render_2d_transform;
                 transform.pivot = game.camera_position;
                 transform.alignment = v2(0.5);
-                transform.depth = 0.01;
+                transform.layer = 1;
                 draw_texture_box(render, transform, v2(10), dfont.atlas_texture_index, [ v2(0), v2(1) ] box2);
             }
 
@@ -1000,7 +1000,7 @@ func game_update program_update_type
 
                     var transform render_2d_transform;
                     transform.pivot = [ x, y ] vec2;
-                    transform.depth = 0.99;
+                    transform.layer = render.context.viewport_size.y cast(s16) * -2 - 2;
                     // draw_texture_box(render, transform, v2(1.0), color, {} render_2d_texture, {} box2);
 
                     var sprite_id = get_sprite(tile_map, x, y);
@@ -1009,9 +1009,9 @@ func game_update program_update_type
                     if false
                     {
                     if (x + y) bit_and 1
-                        draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile019, transform);
+                        draw_sprite(render, asset_sprite_id.tile_rpgtile019, transform);
                     else
-                        draw_sprite(render, asset_sprite_id.kenny_rpg_tile_rpgtile024, transform);
+                        draw_sprite(render, asset_sprite_id.tile_rpgtile024, transform);
                     }
                 }
             }
@@ -1035,7 +1035,10 @@ func game_update program_update_type
                     else if direction.y < -0.2
                         animation.show_back = false;
 
-                    var transform = get_y_sorted_transform(render, entity.position + entity.collider.center, v2(0.5));
+                    var transform render_2d_transform;
+                    transform.pivot     = entity.position + entity.collider.center;
+                    transform.alignment = v2(0.5);
+                    transform.layer = get_y_layer(render, transform.pivot.y - entity.collider.radius);
 
                     var sprite_id = asset_sprite_id.none;
                     var color = [ 1, 1, 1, 1 ] vec4;
@@ -1102,9 +1105,28 @@ func game_update program_update_type
                             transform.rotation  = animation.time * 2 * pi32;
                         }
                     }
+                    case game_entity_tag.tall_grass
+                    {
+                        var sprite_id = asset_sprite_id.entity_tall_grass_4;
+
+                        transform.pivot.y -= 0.5;
+                        transform.alignment = [ 0.5, 0 ] vec2;
+
+                        loop var i; 4
+                        {
+                            var sub_transform = transform;
+                            sub_transform.pivot += [ (i mod 3) * 0.05, i * 0.2 ] vec2;
+                            sub_transform.layer = get_y_layer(render, sub_transform.pivot.y);
+                            // transform.flip_x = i bit_and 1;
+
+                            var color = [ 1, 1, 1, 1 ] vec4;
+                            color.rgb *= (i bit_and 1) * -0.2 + 1.0;
+
+                            draw_sprite(render, sprite_id,  sub_transform, color);
+                        }
+                    }
 
                     transform.flip_x = animation.flip_x;
-
 
                     if sprite_id is_not asset_sprite_id.none
                     {
@@ -1121,7 +1143,10 @@ func game_update program_update_type
 
                 var sprite_id = asset_sprite_id.count + animation.show_back cast(u32);
 
-                var transform = get_y_sorted_transform(render, entity.position, v2(0.5, 0));
+                var transform render_2d_transform;
+                transform.pivot     = entity.position + entity.collider.center;
+                transform.alignment = v2(0.5);
+                transform.layer = get_y_layer(render, transform.pivot.y - entity.collider.radius);
                 transform.flip_x = animation.flip_x;
 
                 if entity.health <= 0
@@ -1240,11 +1265,11 @@ func game_update program_update_type
                     transform.pivot = entity.position + entity.collider.center;
 
                     if false
-                        transform.depth = 0.98; // draw below
+                        transform.layer = render.context.viewport_size.y cast(s16) * -2; // draw below
                     else
-                        transform.depth = 0.0; // draw on top
+                        transform.layer = 0;
 
-                    draw_circle(render, transform.pivot, entity.collider.radius, transform.depth, [ 0.1, 0.1, 1, 0.25 ] vec4);
+                    draw_circle(render, transform.pivot, entity.collider.radius, transform.layer, [ 0.1, 0.1, 1, 0.25 ] vec4);
                 }
             }
 
@@ -1383,9 +1408,9 @@ func try_draw_team_mark(render render_2d_api ref, transform render_2d_transform,
 {
     if team_index < 2
     {
-        // adjust the depth
         transform.pivot.y -= 0.25;
-        transform.depth -= 0.01;
+        // all sprites y positions have 2 layers, so we place inbetween two sprite layers
+        transform.layer += 1;
         def team_sprite_ids = [ asset_sprite_id.item_team_mark_red, asset_sprite_id.item_team_mark_blue ] asset_sprite_id[];
 
         draw_sprite(render, team_sprite_ids[team_index], transform);
